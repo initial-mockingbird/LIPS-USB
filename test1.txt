@@ -1,0 +1,8 @@
+.lex 123 asfg
+.lex 454878
+.lex sdfgh
+.lex ////
+.lex 154
+.lex ==
+.lex kwejrfgh klfjfj 123456 =--
+.failed
