@@ -1,22 +1,6 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections #-}
-{- |
-Module      : Lexer
-Description : Module that has all the lexer related functions.
-Maintainer  : 15-11139@usb.ve, 16-10400@usb.ve 17-10538@usb.ve
-Stability   : experimental
-Portability : POSIX
-
-Currently Holds the definition of the LIPS tokens, as well as the lexer function.
--}
 module Lexer.Lexer where
-import Text.ParserCombinators.Parsec hiding (token, tokens)
-import Text.Read (readMaybe)
-import Data.Bifunctor
-import Text.Parsec.Error ( messageString, errorMessages  )
-import Data.Foldable (traverse_)
-import Debug.Trace
 
+import Data.Char
 
 
 -- | Tokens of the language
@@ -57,160 +41,91 @@ data Token
     | TkColonColon   -- ^ @ :: @
     | TkWhile        -- ^ @ While @
     | TkIf           -- ^ @ If @
+    | TkInt          -- ^ @ int @
+    | TkBool         -- ^ @ bool @
+    | TkType         -- ^ @ type @
     deriving (Show,Eq)
 
-{-
-jsjsf <- tkId "jsjsf" (line 1, col 1)
-2154  <- tkNum 2154 (line 2, col 1)
-while <- 
-True 1dfjhgj <- 
+-- ////////////// Simbolos y operadores ////////////////
+op :: [[Char]]
+op = ["(",")","^","+","-","!","*","%","<","<=",">=",">","=","&&","||"]
+tkOp = [ TkOpenPar, TkClosePar, TkPower, TkPlus, TkMinus, TkNot, TkMult, TkMod, TkLT, TkLE, TkGE, TkGT, TkEQ, TkAnd, TkOr ]
 
+sim :: [[Char]]
+sim = ["‘",",",":=",";","=>","->","<-","[","]","{","}",".",":","::","while","if"]
+tkSim = [ TkQuote, TkComma, TkAssign, TkSemicolon, TkYields, TkRArrow, TkLArrow, TkOpenBracket, TkCloseBracket, TkOpenBrace, TkCloseBrace, TkDot, TkColon, TkColonColon, TkWhile, TkIf ]
+
+reservedWord :: [[Char]]
+reservedWord = [ "int", "bool", "type", "false", "true" ]
+tkReservedWord = [TkInt, TkBool, TkType, TkFalse, TkTrue ]
+
+spe :: [[Char]]
+spe = op ++ sim ++ reservedWord
+
+--      Resto   StrOriginal  listaStr
+split :: [Char] ->[Char] -> [[Char]]
+split rest [] = if null rest then [] else [rest] 
+split rest [x]
+    | null rest = [[x]]
+    | [x] `elem` spe = [rest,[x]]
+    | otherwise = [ rest++[x] ]
+split rest (x1:x2:xs) 
+    | x1 == ' ' = z ++ split [] (x2:xs)
+    | ([x1]++[x2]) `elem` spe = z ++ [[x1,x2]] ++ split [] xs
+    | [x1] `elem` spe = z ++ [[x1]] ++ split [] (x2:xs)
+    | otherwise = split (rest++[x1]) (x2:xs)
+    where z = if null rest then [] else [rest] 
+
+
+findPos list elt = [index | (index, e) <- zip [0..] list, e == elt]
+
+{-
+tokenizer :: [Char] -> [Char]
+tokenizer x
+    -- Operator
+    | x `elem` op = tkOp !! ((findPos op x)!!0)
+    -- Symbol
+    | x `elem` sim = tkSim !! ((findPos sim x)!!0)
+    -- Reserved Word
+    | x `elem` reservedWord = tkReservedWord !! ((findPos reservedWord x)!!0)
+    -- It's a number
+    | all isDigit x = "TkNum("++x++")"
+    -- It's variable identifier
+    | all isAlphaNum x = "TkId('"++ x ++"')"
+    | otherwise = "Error: "++x ++"==> interpretación no implementada"
 -}
 
+tokenizer :: ([Char],Int) -> Either (String,Int) Token
+tokenizer (x,col)
+    -- Operator
+    | x `elem` op           = Right $ tkOp !! head (findPos op x)
+    -- Symbol
+    | x `elem` sim          = Right $ tkSim !! head (findPos sim x)
+    -- Reserved Word
+    | x `elem` reservedWord = Right $ tkReservedWord !! head (findPos reservedWord x)
+    -- It's a number
+    | all isDigit x         = Right $ TkNum $ read x
+    -- It's variable identifier
+    | isId x                = Right $ TkId x
+    | otherwise             = Left ("ERROR: lexer(" ++ show x ++ ") ==> Inicializador de identificador invalido",col)
 
--- | Each lex line should save the token and the position, in case of errors.
-type TokenPos =  (Token,SourcePos)
 
-{-
-Lexer:
+manyToken :: String -> Either (String,Int) [Token]
+manyToken xs = traverse tokenizer $ cols ( split [] xs )
 
-<sentence> 
-    = <operator>
-    | <brackets>
-    | <number>
-    | <reserved>
-    | <identifier> 
+cols :: [String] -> [(String,Int)]
+cols []     = []
+cols (x:xs) = (x,0) : map (fmap (+length x)) (cols xs)
 
-<brackets>   = ()[]
-<operator>   = TO MANY TO LIST, but you get the gist
-<number>     = 32 bit number
-<reserved>   = While, If, True, False, Mod
-<identifier> = any string that starts with: [A-Z] + [a-z] + [_] and
-               ends with: ([A-Z] + [a-z] + [_] + [0-9])*
-
--}
-
--- | Tokenizes an identifier
-idTokenizer :: Parser TokenPos
-idTokenizer = do
-    pos <- getPosition
-    i   <- getInput 
-    fc  <- oneOf firstChar
-    r   <- optionMaybe (many $ oneOf rest)
-    spaces
-    return $ (,pos) $ 
-        case r of
-            Nothing -> TkId [fc]
-            Just s  -> TkId $ fc : s
-  where firstChar = ['A'..'Z'] ++ ['a'..'z'] ++ "_"
+isId :: String -> Bool
+isId [] = False 
+isId (fc:r) = (fc `elem` firstChar) && all (`elem` rest) r
+    where
+        firstChar = ['A'..'Z'] ++ ['a'..'z'] ++ "_"
         rest      = firstChar ++ ['0'..'9']
 
+lexer :: String -> String
+lexer x = either fst unwords $ traverse (fmap show . tokenizer) $ cols ( split [] x )
 
-
--- | Tokenizes a number.
-numTokenizer :: Parser TokenPos
-numTokenizer = do
-    i      <- getInput  
-    pos    <- getPosition 
-    -- Parser String
-    -- fmap readMaybe (Parser String)
-    --                 Parser Int
-    -- <$> = fmap
-    number <- readMaybe <$> many digit
-    pos'   <- getPosition
-    let i'' = take (sourceColumn pos') i
-    notFollowedBy idTokenizer <?> ("ERROR: lexer(" ++ show i'' ++ ") ==> Inicializador de identificador invalido")
-    spaces
-    case number of
-        Nothing -> do
-            i <- getInput
-            fail $ "ERROR: lexer(" ++ show i ++  ") ==> Overflow: entero muy grande."
-        Just n  -> return (TkNum n, pos)
-
--- | Tokenizes the True value.
-trueTokenizer :: Parser TokenPos
-trueTokenizer = do
-    pos <- getPosition 
-    string "true"
-    notFollowedBy alphaNum 
-    spaces
-    return (TkTrue,pos)
-
--- | Tokenizes the False value.
-falseTokenizer :: Parser TokenPos
-falseTokenizer = reservedTokenizerGen "false" TkFalse
-
--- | Tokenizes the mod value.
-modTokenizer :: Parser TokenPos
-modTokenizer = reservedTokenizerGen "mod" TkMod
-
--- | Tokenizes the while value.
-whileTokenizer :: Parser TokenPos
-whileTokenizer = reservedTokenizerGen "while" TkWhile
-
--- | Tokenizes the if value.
-ifTokenizer :: Parser TokenPos
-ifTokenizer = reservedTokenizerGen "if" TkIf
-
--- | Generates a parser for reserved words
-reservedTokenizerGen :: String -> Token -> Parser TokenPos
-reservedTokenizerGen r tk
-    =  string r 
-    *> notFollowedBy alphaNum 
-    *> spaces
-    *> ((tk,) <$> getPosition )
-
--- | Tokenizes a reserved workd
-reservedTokenizer :: Parser TokenPos
-reservedTokenizer = choice 
-    [ trueTokenizer
-    , falseTokenizer
-    , modTokenizer
-    , whileTokenizer
-    , ifTokenizer
-    ]
-
-
--- | Tokenizes the True value.
-trueTokenizer' :: Parser TokenPos
-trueTokenizer' = string ("true" :: [Char]) *> spaces *> ((TkTrue, ) <$> getPosition )
-
--- | Tokenizes a single string
-singleToken :: Parser TokenPos
-singleToken = foldl1 (<|>)  
-    [ numTokenizer
-    , try reservedTokenizer
-    , idTokenizer
-    ]
-
--- | Tokenizes the entirety of the input 
-manyToken :: Parser [TokenPos]
-manyToken = do
-    spaces
-    tokens   <- many singleToken
-    pos      <- getPosition 
-    i        <- getInput 
-    eof <?>  ("ERROR: lexer(" ++ show i ++ ") ==> token invalido en la entrada: " ++ [last i])
-    return tokens
-
-
-{-
--- | a
-toLexerError :: ParseError -> [(String, String)] 
-toLexerError error' = trace (show eTrace) $ zip (repeat errorPos') errorMsgs
-    where
-        eTrace     = messageString <$> errorMessages error'
-        errorMsgs  = messageString <$> errorMessages error'
-        errorPos'  = show $ errorPos  error'
-
-
-
--- | a
-lexer :: String ->  Either [(String, String)] [TokenPos]
-lexer =  first toLexerError . parse manyToken "" 
--}
-
-
-showTokenPos :: String -> [TokenPos] -> String
-showTokenPos input tokens = "OK: lexer(" ++  show input ++  ") ==> " ++ show (map fst tokens)
-
+showTokenPos :: String -> [Token] -> String
+showTokenPos input tokens = "OK: lexer(" ++  show input ++  ") ==> " ++ show tokens

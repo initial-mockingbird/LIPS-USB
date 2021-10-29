@@ -34,7 +34,7 @@ import           Text.Parsec            (ParseError, ParsecT, SourcePos,
                                          manyTill, modifyState, notFollowedBy,
                                          parse, runParserT, sourceLine,
                                          sourceName, spaces, string, try, (<?>),
-                                         (<|>), letter, alphaNum, many1, sepEndBy, newline, optional)
+                                         (<|>), letter, alphaNum, many1, sepEndBy, newline, optional, setSourceColumn)
 import           Text.Parsec.Char       
 import           Text.Parsec.Error      (errorMessages, messageString)
 import           Text.Read              (readMaybe)
@@ -230,9 +230,14 @@ parseLex = do
     pos  <- getPosition 
     args <- parseArg
     f    <- getCurrentFile
-    case parse manyToken f args of
-        Left parseError -> parserError pos parseError
-        Right tokens    -> liftIO $ putStrLn $ showTokenPos args tokens 
+    case manyToken args of
+        Left (errMsg,col) -> do
+            f <- fromMaybe "." . actualFile <$> getState 
+            let errPos = setSourceColumn pos col
+            let eErr = (f,errPos,errMsg)
+            putErr eErr
+            liftIO $ putStrLn $ showREPLError eErr
+        Right tokens          -> liftIO $ putStrLn $ showTokenPos args tokens 
 
 
 -- | A parser for the arguments of a @.load@ or @.lex@ is just parsing till

@@ -15,8 +15,11 @@ import           Lexer.Lexer
 import           Test.Tasty
 import           Test.Tasty.Hspec
 
+
+lexer = undefined 
+
 main :: IO ()
-main = hspec spec_lexer
+main = hspec specLexer
 
 readExamples :: IO [(Text, Text)]
 readExamples =
