@@ -2,10 +2,12 @@
 .lex 454878
 .lex sdfgh
 .lex ////
+
 .lex 154
+
 987--++
 .lex ==
 .lex kwejrfgh klfjfj 123456 =--
 .lex sjf 5454 jfdj
 .load test2.txt
-sdf
+sdfghj

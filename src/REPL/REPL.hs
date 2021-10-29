@@ -34,9 +34,8 @@ import           Text.Parsec            (ParseError, ParsecT, SourcePos,
                                          manyTill, modifyState, notFollowedBy,
                                          parse, runParserT, sourceLine,
                                          sourceName, spaces, string, try, (<?>),
-                                         (<|>), letter, alphaNum)
-import           Text.Parsec.Char       (anyChar, char, endOfLine, spaces,
-                                         string)
+                                         (<|>), letter, alphaNum, many1, sepEndBy, newline, optional)
+import           Text.Parsec.Char       
 import           Text.Parsec.Error      (errorMessages, messageString)
 import           Text.Read              (readMaybe)
 import           Data.Functor           (($>))
@@ -151,13 +150,23 @@ executing the state or folding (reducing) the state.
 -- | A parser for a file is just a parser for many lines
 -- but remembering only the last state.
 parseFile :: StateParser [REPLError]
-parseFile = concat . take 1 . reverse . fmap errors <$> many parseLine
+parseFile = concat . take 1 . reverse . fmap errors <$> parseFile'
 
+
+parseFile' :: StateParser [SessionState]
+parseFile' = many parseLine
+
+-- | A parser that ignores empty input.
+passEmpty :: StateParser a -> StateParser a
+passEmpty s = do
+    spaces
+    optional  (try endOfLine)
+    s
 
 -- | A parser for a line is either a parser for the special commands
 -- or in case that fails, a parser for the code.
 parseLine :: StateParser SessionState
-parseLine = (try spaces >> eof >> getState) <|> parseSpecial <|> (parseCode >> getState)
+parseLine =  passEmpty $ parseSpecial <|> (parseCode >> getState)
 
 
 -- | A parser for special commands is just parsing '.' and then
@@ -178,8 +187,7 @@ parseFailure = do
     spaces
     notFollowedBy anyChar <?> "ERROR: unexpected argument provided to failed"
     err <- errors <$> getState
-    let thrd (_,_,z) = z
-    liftIO $ putStrLns $ thrd <$> err
+    liftIO $ putStrLns $ showREPLError <$> err
 
 -- | A parser for the @.reset@ command is just a parser for "reset". Flushes
 -- the errors unless its executed inside a file (it's generally not desirable to flush the error
@@ -230,7 +238,9 @@ parseLex = do
 -- | A parser for the arguments of a @.load@ or @.lex@ is just parsing till
 -- we reach either an end of line or an end of file.
 parseArg :: StateParser String
-parseArg = manyTill anyChar (try (void endOfLine) <|> eof)
+parseArg = do
+    fc <- manyTill anyChar (eof <|> void (try crlf) <|> void newline)
+    return  fc
 
 
 -- | A parser for the @.load@ command is just a parser for "oad" (since 'l' was read)
@@ -240,10 +250,9 @@ parseLoad :: StateParser ()
 parseLoad = do
     string "oad"
     spaces
-    arg  <- many anyChar 
+    arg  <- parseArg <?> "ERROR: load ==> Expecting a file."
     fp   <- liftIO $ safeReadFile arg
     pos  <- getPosition 
-    liftIO $ putStrLn $ "file is: " ++ arg
     let ist = initialST{loadingMode=True,actualFile=Just arg}
     case fp of
         Left e     -> do
@@ -263,7 +272,7 @@ parseCode :: StateParser ()
 parseCode = do
     i    <- getInput 
     fc   <- alphaNum <?>  ("ERROR: " ++ show i ++ " ==> implementacion no implementada" )
-    args <- parseArg 
+    args <- parseArg
     pos  <- getPosition 
     f    <- getCurrentFile
     let err = "ERROR: " ++ (fc:args) ++ " ==> implementacion no implementada"
