@@ -1,0 +1,18 @@
+ ,OK: lexer("") ==> []
+num,OK: lexer("num") ==> [TkId "num"]
+num123,OK: lexer("num123") ==> [TkId "num123"]
+123,OK: lexer("123") ==> [TkNum 123]
+123 num,OK: lexer("123 num") ==> [TkNum 123,TkId "num"]
+nombre 2 True,OK: lexer("nombre 2 True") ==> [TkId "nombre",TkNum 2,TkId "True"]
+nombre 2 true,OK: lexer("nombre 2 true") ==> [TkId "nombre",TkNum 2,TkTrue]
+nombre2true,OK: lexer("nombre2true") ==> [TkId "nombre2true"]
+falsetrue,OK: lexer("falsetrue") ==> [TkId "falsetrue"]
+false true,OK: lexer("false true") ==> [TkFalse,TkTrue]
+tr u e,OK: lexer("tr u e") ==> [TkId "tr",TkId "u",TkId "e"] 
+5 tr u e,OK: lexer("tr u e") ==> [TkNum 5,TkId "tr",TkId "u",TkId "e"]
+if true 1,OK: lexer("if true 1") ==> [TkIf,TkTrue,TkNum 1]
+if true1,OK: lexer("if true1") ==> [TkIf,TkId "true1"]
+5tr u e, ERROR: lexer("5t") ==> Inicializador de identificador invalido
+1if true,ERROR: lexer("1i") ==> Inicializador de identificador invalido
+123num,ERROR: lexer("123n") ==> Inicializador de identificador invalido
+2true,ERROR: lexer("2t") ==> Inicializador de identificador invalido
