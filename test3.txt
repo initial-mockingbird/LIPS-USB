@@ -1,0 +1,2 @@
+.lex fkjgkjg
+.load test2.txt
