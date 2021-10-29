@@ -26,6 +26,9 @@ dependencies:
 - containers
 - bytestring
 - text
+- tasty
+- tasty-hunit
+- tasty-hspec
 
 library:
   source-dirs: src
@@ -43,7 +46,7 @@ executables:
 
 tests:
   LIPS-USB-test:
-    main:                Spec.hs
+    main:                LibTest.hs
     source-dirs:         test
     ghc-options:
     - -threaded
