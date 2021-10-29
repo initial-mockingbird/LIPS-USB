@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       Lexer.Lexer
+      Lexer.Lexer2
       Lib
       REPL.REPL
   other-modules:

@@ -17,6 +17,8 @@ import Text.Parsec.Error ( messageString, errorMessages  )
 import Data.Foldable (traverse_)
 import Debug.Trace
 
+
+
 -- | Tokens of the language
 data Token
     = TkId String    -- ^ identifier
@@ -57,6 +59,15 @@ data Token
     | TkIf           -- ^ @ If @
     deriving (Show,Eq)
 
+{-
+jsjsf <- tkId "jsjsf" (line 1, col 1)
+2154  <- tkNum 2154 (line 2, col 1)
+while <- 
+True 1dfjhgj <- 
+
+-}
+
+
 -- | Each lex line should save the token and the position, in case of errors.
 type TokenPos =  (Token,SourcePos)
 
@@ -68,7 +79,7 @@ Lexer:
     | <brackets>
     | <number>
     | <reserved>
-    | <identifier>
+    | <identifier> 
 
 <brackets>   = ()[]
 <operator>   = TO MANY TO LIST, but you get the gist
@@ -78,7 +89,6 @@ Lexer:
                ends with: ([A-Z] + [a-z] + [_] + [0-9])*
 
 -}
-
 
 -- | Tokenizes an identifier
 idTokenizer :: Parser TokenPos
@@ -95,13 +105,19 @@ idTokenizer = do
   where firstChar = ['A'..'Z'] ++ ['a'..'z'] ++ "_"
         rest      = firstChar ++ ['0'..'9']
 
+
+
 -- | Tokenizes a number.
 numTokenizer :: Parser TokenPos
 numTokenizer = do
     i      <- getInput  
     pos    <- getPosition 
+    -- Parser String
+    -- fmap readMaybe (Parser String)
+    --                 Parser Int
+    -- <$> = fmap
     number <- readMaybe <$> many digit
-    pos'    <- getPosition
+    pos'   <- getPosition
     let i'' = take (sourceColumn pos') i
     notFollowedBy idTokenizer <?> ("ERROR: lexer(" ++ show i'' ++ ") ==> Inicializador de identificador invalido")
     spaces
@@ -193,6 +209,7 @@ toLexerError error' = trace (show eTrace) $ zip (repeat errorPos') errorMsgs
 lexer :: String ->  Either [(String, String)] [TokenPos]
 lexer =  first toLexerError . parse manyToken "" 
 -}
+
 
 showTokenPos :: String -> [TokenPos] -> String
 showTokenPos input tokens = "OK: lexer(" ++  show input ++  ") ==> " ++ show (map fst tokens)
