@@ -11,8 +11,8 @@ If you want to check the project on the browser, you can open the docs running: 
 
 <center>
 
-![main page](/Imgs/haddock1.png)
-![main page](/Imgs/haddock2.png)
+![main page](/Imgs/haddock1.PNG)
+![main page](/Imgs/haddock2.PNG)
 
 </center>
 
@@ -20,7 +20,7 @@ If the `#source` button is clicked, then it will show you the code for the modul
 
 <center>
 
-![main page](/Imgs/haddock3.png)
+![main page](/Imgs/haddock3.PNG)
 
 </center>
 
