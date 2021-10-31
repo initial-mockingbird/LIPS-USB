@@ -7,8 +7,8 @@ import           Data.Text        as Text
 import qualified Data.Text.IO     as Text
 import           Text.Printf
 
-import           Lib
 
+import Lexer.Lexer ( lexer )
 import           Test.Tasty
 import           Test.Tasty.Hspec
 
@@ -30,4 +30,4 @@ specLexer = do
     examples <- runIO readExamples
     forM_ examples $ \(input, expected) ->
         it (printf "lexer '%s' to '%s'" input expected) $
-        lexer input `shouldBe` expected
+        lexer (unpack input) `shouldBe` unpack expected

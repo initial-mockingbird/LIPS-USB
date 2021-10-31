@@ -75,13 +75,13 @@ tkOp = [ TkOpenPar, TkClosePar, TkPower, TkPlus, TkMinus, TkNot, TkMult, TkMod, 
 
 -- | Symbols of LIPS-USB language
 sim :: [[Char]]
-sim = ["‘",",",":=",";","=>","->","<-","[","]","{","}",".",":","::","while","if"]
-tkSim = [ TkQuote, TkComma, TkAssign, TkSemicolon, TkYields, TkRArrow, TkLArrow, TkOpenBracket, TkCloseBracket, TkOpenBrace, TkCloseBrace, TkDot, TkColon, TkColonColon, TkWhile, TkIf ]
+sim = ["‘",",",":=",";","=>","->","<-","[","]","{","}",".",":","::"]
+tkSim = [ TkQuote, TkComma, TkAssign, TkSemicolon, TkYields, TkRArrow, TkLArrow, TkOpenBracket, TkCloseBracket, TkOpenBrace, TkCloseBrace, TkDot, TkColon, TkColonColon ]
 
 -- | Reserverd words of LIPS-USB language
 reservedWord :: [[Char]]
-reservedWord = [ "int", "bool", "type", "false", "true", "lazy" ]
-tkReservedWord = [TkInt, TkBool, TkType, TkFalse, TkTrue, TkLazy ]
+reservedWord = [ "int", "bool", "type", "false", "true", "lazy", "while","if" ]
+tkReservedWord = [TkInt, TkBool, TkType, TkFalse, TkTrue, TkLazy, TkWhile, TkIf]
 
 -- | Special characters = Opertaros U Symbols U Reserved Words
 spe :: [[Char]]
@@ -95,8 +95,8 @@ igChar = [ '\n', ' ', '\t' ]
 
 -- | Bolean function to know if a string is a possible TkId
 isId 
-    :: String   -- Input String
-    -> Bool     -- True if the string can be a Tkid or otherwise False
+    :: String   -- ^ Input String
+    -> Bool     -- ^ True if the string can be a Tkid or otherwise False
 isId [] = False 
 isId (fc:r) = (fc `elem` firstChar) && all (`elem` rest) r
     where
@@ -152,7 +152,8 @@ tokenizer (x,col)
     -- Symbol
     | x `elem` sim          = Right $ tkSim !! head (findPos sim x)
     -- Reserved Word
-    | x `elem` reservedWord = Right $ tkReservedWord !! head (findPos reservedWord x)
+    | (x `elem` reservedWord)
+        && isId x           = Right $ tkReservedWord !! head (findPos reservedWord x)
     -- It's a number
     | all isDigit x         = Right $ TkNum $ read x
     -- It's variable identifier
@@ -175,8 +176,8 @@ lexer x = parsed
         f (Left x)  = L $ Left [x]
         f (Right a) = L $ Right a
 
-        traversed = unwrapL $ traverse (fmap show . f . tokenizer) $ cols ( split [] x )
-        parsed = either unlines unwords $ first (fmap fst) traversed
+        traversed = unwrapL $ fmap (showTokenPos x) $ traverse ( f . tokenizer) $ cols ( split [] x )
+        parsed = either unlines id $ first (fmap fst) traversed
 
 -- | Aux function that transforms the string into an ok message.
 showTokenPos :: String -> [Token] -> String
