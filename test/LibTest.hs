@@ -1,7 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module LibTest where
-
 import           Control.Monad
 import           Data.Semigroup
 import           Data.Text        (Text)
@@ -10,13 +8,9 @@ import qualified Data.Text.IO     as Text
 import           Text.Printf
 
 import           Lib
-import           Lexer.Lexer
 
 import           Test.Tasty
 import           Test.Tasty.Hspec
-
-
-lexer = undefined 
 
 main :: IO ()
 main = hspec specLexer
@@ -26,7 +20,7 @@ readExamples =
     mapM asPair =<< Text.lines <$> Text.readFile "test/lexerTestCases.csv"
     where
         asPair line =
-            case Text.splitOn "," line of
+            case Text.splitOn ", " line of
             [input, expected] -> pure (input, expected)
             _ -> fail ("Invalid example line: " <> Text.unpack line)
 
