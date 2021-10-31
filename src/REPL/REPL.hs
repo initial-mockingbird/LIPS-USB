@@ -230,13 +230,13 @@ parseLex = do
     pos  <- getPosition 
     args <- parseArg
     f    <- getCurrentFile
+    let errFunction (errMsg,col) = (f,setSourceColumn pos col,errMsg)
     case manyToken args of
-        Left (errMsg,col) -> do
+        Left errors -> do
             f <- fromMaybe "." . actualFile <$> getState 
-            let errPos = setSourceColumn pos col
-            let eErr = (f,errPos,errMsg)
-            putErr eErr
-            liftIO $ putStrLn $ showREPLError eErr
+            let mappedTriples =  (\ (errMsg,col) -> (f,setSourceColumn pos col,errMsg)) <$> errors
+            mapM_ putErr mappedTriples
+            mapM_ (liftIO . putStrLn . showREPLError) mappedTriples
         Right tokens          -> liftIO $ putStrLn $ showTokenPos args tokens 
 
 

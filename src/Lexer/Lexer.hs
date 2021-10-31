@@ -1,6 +1,7 @@
 module Lexer.Lexer where
 
 import Data.Char
+import Data.Bifunctor
 
 -- | Tokens of the language
 data Token
@@ -45,6 +46,25 @@ data Token
     | TkType         -- ^ @ type @
     | TkLazy         -- ^ @ lazy @
     deriving (Show,Eq)
+
+-- | Auxiliary type, will provide a "logged" version of Either
+newtype LEither a = L (Either [(String,Int)] a)
+
+
+-- | Unwraps the aux type.
+unwrapL :: LEither a -> Either [(String,Int)] a
+unwrapL (L a) = a 
+
+-- The functor instance will be the same
+instance Functor LEither where
+    fmap f (L xs) = L $ fmap f xs
+
+-- The applicative instance is mostly the same
+instance Applicative LEither where
+    pure = L . Right
+    -- but it concatenates the errors.
+    (L (Left logs)) <*> (L (Left err)) = L $ Left (err ++ logs)
+    (L f) <*> (L a)                    = L $ f <*> a
 
 -- ========= Symbols and operators =========
 
@@ -124,8 +144,8 @@ findPos list elt = [index | (index, e) <- zip [0..] list, e == elt]
 
 -- | Convert a pair (String,column) to a (Token or Error) element
 tokenizer 
-    :: ([Char],Int)                 -- Pair (String,column)
-    -> Either (String,Int) Token    -- Error or token
+    :: ([Char],Int)                 -- ^ Pair (String,column)
+    -> Either (String,Int) Token    -- ^ Error or token
 tokenizer (x,col)
     -- Operator
     | x `elem` op           = Right $ tkOp !! head (findPos op x)
@@ -141,12 +161,26 @@ tokenizer (x,col)
 
 -- | Convert a String to ( Token or Error )
 manyToken 
-    :: String                       -- Inicial String 
-    -> Either (String,Int) [Token]  -- (Error,position) or token
-manyToken xs = traverse tokenizer $ cols ( split [] xs )
+    :: String                       -- ^ Inicial String 
+    -> Either [(String,Int)] [Token]  -- ^ (Error,position) or token
+manyToken xs = unwrapL $ traverse ( f . tokenizer) $ cols ( split [] xs )
+    where
+        f (Left x)  = L $ Left [x]
+        f (Right a) = L $ Right a
 
+-- | Lexes a string.
 lexer :: String -> String
-lexer x = either fst unwords $ traverse (fmap show . tokenizer) $ cols ( split [] x )
+lexer x = parsed
+    where
+        f (Left x)  = L $ Left [x]
+        f (Right a) = L $ Right a
 
+        traversed = unwrapL $ traverse (fmap show . f . tokenizer) $ cols ( split [] x )
+        parsed = either unlines unwords $ first (fmap fst) traversed
+
+-- | Aux function that transforms the string into an ok message.
 showTokenPos :: String -> [Token] -> String
 showTokenPos input tokens = "OK: lexer(" ++  show input ++  ") ==> " ++ show tokens
+
+
+
