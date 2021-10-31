@@ -1,7 +1,14 @@
+{- |
+Module      : Lexer
+Description : Provides necessary tools for lexing.
+Maintainer  : 15-11139@usb.ve, 16-10400@usb.ve 17-10538@usb.ve
+Stability   : experimental
+Portability : POSIX
+-}
 module Lexer.Lexer where
 
-import Data.Char
-import Data.Bifunctor
+import Data.Char ( isDigit )
+import Data.Bifunctor ( Bifunctor(first) )
 
 -- | Tokens of the language
 data Token
@@ -162,7 +169,7 @@ tokenizer (x,col)
 
 -- | Convert a String to ( Token or Error )
 manyToken 
-    :: String                       -- ^ Inicial String 
+    :: String                         -- ^ Inicial String 
     -> Either [(String,Int)] [Token]  -- ^ (Error,position) or token
 manyToken xs = unwrapL $ traverse ( f . tokenizer) $ cols ( split [] xs )
     where

@@ -12,34 +12,35 @@ Portability : POSIX
 -}
 module REPL.REPL where
 
+import           Control.Applicative    (Alternative (empty))
 import           Control.Exception      (Exception (displayException),
                                          IOException, catch)
 import           Control.Monad          (foldM_, unless, when)
 import           Control.Monad.IO.Class (MonadIO (liftIO))
 import           Data.ByteString        (ByteString, readFile)
 import           Data.ByteString.Char8  (unpack)
-import           Data.Either            (Either (..), either, isLeft)
+import           Data.Either            (Either (..), either)
 import           Data.Foldable          (sequenceA_, traverse_)
+import           Data.Functor           (($>))
 import           Data.Maybe             (fromMaybe)
-import qualified Data.Set               as S
 import           Lexer.Lexer            (manyToken, showTokenPos)
 import           Prelude                hiding (lex, lines, readFile)
 import           System.Exit            (exitSuccess)
 import           System.IO              (BufferMode (NoBuffering),
                                          hSetBuffering, stdout)
 import           Text.Parsec            (ParseError, ParsecT, SourcePos,
-                                         anyChar, char, endOfLine, eof,
-                                         errorPos, getInput, getPosition,
-                                         getState, incSourceLine, many,
-                                         manyTill, modifyState, notFollowedBy,
-                                         parse, runParserT, sourceLine,
-                                         sourceName, spaces, string, try, (<?>),
-                                         (<|>), letter, alphaNum, many1, sepEndBy, newline, optional, setSourceColumn)
-import           Text.Parsec.Char       
+                                         alphaNum, anyChar, char, endOfLine,
+                                         eof, errorPos, getInput, getPosition,
+                                         getState, incSourceLine, letter, many,
+                                         many1, manyTill, modifyState, newline,
+                                         notFollowedBy, optional, parse,
+                                         runParserT, sepEndBy, setSourceColumn,
+                                         sourceLine, sourceName, spaces, string,
+                                         try, (<?>), (<|>))
+import           Text.Parsec.Char       (alphaNum, anyChar, char, crlf,
+                                         endOfLine, newline, spaces, string)
 import           Text.Parsec.Error      (errorMessages, messageString)
-import           Text.Read              (readMaybe)
-import           Data.Functor           (($>))
-import Control.Applicative (Alternative(empty))
+
 ------------------------------
 -- Types
 ------------------------------
@@ -47,7 +48,6 @@ import Control.Applicative (Alternative(empty))
 -- | Holds the current state of the REPL.
 data SessionState = ST 
     { errors      :: [REPLError]    -- ^ A list of all the errors so far.
-    , loadedFiles :: S.Set FilePath -- ^ A Set containing the loaded Files, used in the future to detect loading loops.
     , loadingMode :: Bool           -- ^ Determines if the current state is originated from a @.load@ call
     , actualFile  :: Maybe FilePath -- ^ The file that was loaded by the @.load@ call
     , env         :: Bool           -- ^ We need an environment to hold the variables in the future
@@ -68,7 +68,6 @@ type StateParser a = ParsecT String SessionState IO a
 initialST :: SessionState
 initialST = ST 
     { errors      = []
-    , loadedFiles = S.empty 
     , loadingMode = False
     , actualFile  = Nothing 
     , env         = False
@@ -132,6 +131,7 @@ The REPL is going to have the following grammar (more or less):
 <sentence> 
     = <special>
     | <code>
+    | lambda (empty string)
 
 <special> = .load FilePath
             .failure 
@@ -141,9 +141,7 @@ The REPL is going to have the following grammar (more or less):
         
 <code> = String
 
-So the idea is to parse each sentence until we get a way to build state.
-Since state is a monad, it's composable, thus the problem will be reduced to either
-executing the state or folding (reducing) the state.
+So the idea is to parse each sentence until we get a way to modify the inner parser state.
 -}
 
 
@@ -152,7 +150,7 @@ executing the state or folding (reducing) the state.
 parseFile :: StateParser [REPLError]
 parseFile = concat . take 1 . reverse . fmap errors <$> parseFile'
 
-
+-- | A parser for a file is just a parser for many lines.
 parseFile' :: StateParser [SessionState]
 parseFile' = many parseLine
 
@@ -297,7 +295,7 @@ repl st@ST{errors=errs} = do
     putStr ">>> "
     iInput <-  getLine 
     when (null iInput) $
-        putStrLn "" >> repl st
+         repl st
     res <- runParserT parseLine st "." iInput
     case res of
         Left parseError -> do

@@ -11,3 +11,4 @@
 .lex sjf 5454 jfdj
 .load test2.txt
 sdfghj
+.reset
