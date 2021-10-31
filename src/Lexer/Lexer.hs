@@ -85,7 +85,7 @@ tkReservedWord = [TkInt, TkBool, TkType, TkFalse, TkTrue, TkLazy, TkWhile, TkIf]
 
 -- | Special characters = Opertaros U Symbols U Reserved Words
 spe :: [[Char]]
-spe = op ++ sim ++ reservedWord
+spe = op ++ sim
 
 -- | Characters to ignores
 igChar :: [Char]
