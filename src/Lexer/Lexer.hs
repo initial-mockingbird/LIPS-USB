@@ -90,13 +90,13 @@ reservedWord :: [[Char]]
 reservedWord = [ "int", "bool", "type", "false", "true", "lazy", "while","if" ]
 tkReservedWord = [TkInt, TkBool, TkType, TkFalse, TkTrue, TkLazy, TkWhile, TkIf]
 
--- | Special characters = Opertaros U Symbols U Reserved Words
+-- | Special characters = Opertaros U Symbols
 spe :: [[Char]]
 spe = op ++ sim
 
 -- | Characters to ignores
 igChar :: [Char]
-igChar = [ '\n', ' ', '\t' ]
+igChar = [ '\n', ' ', '\t', '\r' ]
 
 -- ========= Functions of the Lexer =========
 
