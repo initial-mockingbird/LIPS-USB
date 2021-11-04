@@ -24,11 +24,13 @@ dependencies:
 - parsec
 - mtl
 - containers
+- pretty-tree
 - bytestring
 - text
 - tasty
 - tasty-hunit
 - tasty-hspec
+- array
 
 library:
   source-dirs: src

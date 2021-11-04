@@ -25,6 +25,7 @@ source-repository head
 
 library
   exposed-modules:
+      Grammar.Grammar
       Lexer.Lexer
       Lib
       REPL.REPL
@@ -33,11 +34,13 @@ library
   hs-source-dirs:
       src
   build-depends:
-      base >=4.7 && <5
+      array
+    , base >=4.7 && <5
     , bytestring
     , containers
     , mtl
     , parsec
+    , pretty-tree
     , tasty
     , tasty-hspec
     , tasty-hunit
@@ -53,11 +56,13 @@ executable LIPS-USB-exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       LIPS-USB
+    , array
     , base >=4.7 && <5
     , bytestring
     , containers
     , mtl
     , parsec
+    , pretty-tree
     , tasty
     , tasty-hspec
     , tasty-hunit
@@ -75,11 +80,13 @@ test-suite LIPS-USB-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       LIPS-USB
+    , array
     , base >=4.7 && <5
     , bytestring
     , containers
     , mtl
     , parsec
+    , pretty-tree
     , tasty
     , tasty-hspec
     , tasty-hunit
