@@ -25,7 +25,8 @@ source-repository head
 
 library
   exposed-modules:
-      Grammar.Grammar
+      AST.AST
+      HGrammar.HGrammar
       Lexer.Lexer
       Lib
       REPL.REPL

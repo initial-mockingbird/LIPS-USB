@@ -1,10 +1,12 @@
 {-# OPTIONS_GHC -w #-}
-module Grammar.Grammar (toAST, sToTree, prettyPrintS, parse' ) where
+module HGrammar.HGrammar (toAST, sToTree, prettyPrintS, parse' ) where
 
 import Data.Char
 import Lexer.Lexer (Token(..), manyToken)
 import Data.Tree  
 import Data.Tree.Pretty (drawVerticalTree)
+import AST.AST
+import Prelude hiding (EQ,LT,GT)
 import qualified Data.Array as Happy_Data_Array
 import qualified Data.Bits as Bits
 import Control.Applicative(Applicative(..))
@@ -79,18 +81,18 @@ action_2 (36) = happyShift action_31
 action_2 (37) = happyShift action_32
 action_2 _ = happyReduce_1
 
-action_3 _ = happyReduce_20
+action_3 _ = happyReduce_19
 
-action_4 _ = happyReduce_19
+action_4 _ = happyReduce_18
 
-action_5 _ = happyReduce_21
+action_5 _ = happyReduce_20
 
-action_6 _ = happyReduce_22
+action_6 _ = happyReduce_21
 
 action_7 (39) = happyShift action_20
-action_7 _ = happyReduce_17
+action_7 _ = happyReduce_16
 
-action_8 _ = happyReduce_16
+action_8 _ = happyReduce_22
 
 action_9 (23) = happyShift action_16
 action_9 (24) = happyShift action_17
@@ -457,7 +459,7 @@ action_48 (37) = happyShift action_32
 action_48 (40) = happyShift action_50
 action_48 _ = happyFail (happyExpListPerState 48)
 
-action_49 _ = happyReduce_18
+action_49 _ = happyReduce_17
 
 action_50 _ = happyReduce_31
 
@@ -492,7 +494,7 @@ action_53 _ = happyReduce_27
 happyReduce_1 = happySpecReduce_1  4 happyReduction_1
 happyReduction_1 (HappyAbsSyn5  happy_var_1)
 	 =  HappyAbsSyn4
-		 (Expr   happy_var_1
+		 (E   happy_var_1
 	)
 happyReduction_1 _  = notHappyAtAll 
 
@@ -517,7 +519,7 @@ happyReduction_4 (HappyAbsSyn5  happy_var_3)
 	_
 	(HappyAbsSyn5  happy_var_1)
 	 =  HappyAbsSyn5
-		 (EQ'   happy_var_1 happy_var_3
+		 (EQ    happy_var_1 happy_var_3
 	)
 happyReduction_4 _ _ _  = notHappyAtAll 
 
@@ -526,7 +528,7 @@ happyReduction_5 (HappyAbsSyn5  happy_var_3)
 	_
 	(HappyAbsSyn5  happy_var_1)
 	 =  HappyAbsSyn5
-		 (NEQ'  happy_var_1 happy_var_3
+		 (NEQ   happy_var_1 happy_var_3
 	)
 happyReduction_5 _ _ _  = notHappyAtAll 
 
@@ -571,7 +573,7 @@ happyReduction_10 (HappyAbsSyn5  happy_var_3)
 	_
 	(HappyAbsSyn5  happy_var_1)
 	 =  HappyAbsSyn5
-		 (LT'   happy_var_1 happy_var_3
+		 (LT    happy_var_1 happy_var_3
 	)
 happyReduction_10 _ _ _  = notHappyAtAll 
 
@@ -580,7 +582,7 @@ happyReduction_11 (HappyAbsSyn5  happy_var_3)
 	_
 	(HappyAbsSyn5  happy_var_1)
 	 =  HappyAbsSyn5
-		 (GT'   happy_var_1 happy_var_3
+		 (GT    happy_var_1 happy_var_3
 	)
 happyReduction_11 _ _ _  = notHappyAtAll 
 
@@ -589,7 +591,7 @@ happyReduction_12 (HappyAbsSyn5  happy_var_3)
 	_
 	(HappyAbsSyn5  happy_var_1)
 	 =  HappyAbsSyn5
-		 (LE'   happy_var_1 happy_var_3
+		 (LE    happy_var_1 happy_var_3
 	)
 happyReduction_12 _ _ _  = notHappyAtAll 
 
@@ -598,7 +600,7 @@ happyReduction_13 (HappyAbsSyn5  happy_var_3)
 	_
 	(HappyAbsSyn5  happy_var_1)
 	 =  HappyAbsSyn5
-		 (GE'   happy_var_1 happy_var_3
+		 (GE    happy_var_1 happy_var_3
 	)
 happyReduction_13 _ _ _  = notHappyAtAll 
 
@@ -621,53 +623,53 @@ happyReduction_15 (HappyAbsSyn5  happy_var_3)
 happyReduction_15 _ _ _  = notHappyAtAll 
 
 happyReduce_16 = happySpecReduce_1  5 happyReduction_16
-happyReduction_16 (HappyTerminal (TkNum happy_var_1))
-	 =  HappyAbsSyn5
-		 (Num   happy_var_1
-	)
-happyReduction_16 _  = notHappyAtAll 
-
-happyReduce_17 = happySpecReduce_1  5 happyReduction_17
-happyReduction_17 (HappyTerminal (TkId  happy_var_1))
+happyReduction_16 (HappyTerminal (TkId  happy_var_1))
 	 =  HappyAbsSyn5
 		 (Var   happy_var_1
 	)
-happyReduction_17 _  = notHappyAtAll 
+happyReduction_16 _  = notHappyAtAll 
 
-happyReduce_18 = happySpecReduce_3  5 happyReduction_18
-happyReduction_18 _
+happyReduce_17 = happySpecReduce_3  5 happyReduction_17
+happyReduction_17 _
 	(HappyAbsSyn5  happy_var_2)
 	_
 	 =  HappyAbsSyn5
-		 (Brack happy_var_2
+		 (happy_var_2
 	)
-happyReduction_18 _ _ _  = notHappyAtAll 
+happyReduction_17 _ _ _  = notHappyAtAll 
+
+happyReduce_18 = happySpecReduce_1  5 happyReduction_18
+happyReduction_18 (HappyAbsSyn7  happy_var_1)
+	 =  HappyAbsSyn5
+		 (happy_var_1
+	)
+happyReduction_18 _  = notHappyAtAll 
 
 happyReduce_19 = happySpecReduce_1  5 happyReduction_19
-happyReduction_19 (HappyAbsSyn7  happy_var_1)
+happyReduction_19 (HappyAbsSyn6  happy_var_1)
 	 =  HappyAbsSyn5
 		 (happy_var_1
 	)
 happyReduction_19 _  = notHappyAtAll 
 
-happyReduce_20 = happySpecReduce_1  5 happyReduction_20
-happyReduction_20 (HappyAbsSyn6  happy_var_1)
-	 =  HappyAbsSyn5
-		 (happy_var_1
+happyReduce_20 = happySpecReduce_1  6 happyReduction_20
+happyReduction_20 _
+	 =  HappyAbsSyn6
+		 (toBoolC True
 	)
-happyReduction_20 _  = notHappyAtAll 
 
 happyReduce_21 = happySpecReduce_1  6 happyReduction_21
 happyReduction_21 _
 	 =  HappyAbsSyn6
-		 (BOOL True
+		 (toBoolC False
 	)
 
 happyReduce_22 = happySpecReduce_1  6 happyReduction_22
-happyReduction_22 _
+happyReduction_22 (HappyTerminal (TkNum happy_var_1))
 	 =  HappyAbsSyn6
-		 (BOOL False
+		 (toNumC  happy_var_1
 	)
+happyReduction_22 _  = notHappyAtAll 
 
 happyReduce_23 = happyReduce 4 7 happyReduction_23
 happyReduction_23 (_ `HappyStk`
@@ -710,7 +712,7 @@ happyReduction_27 _ _ _  = notHappyAtAll
 happyReduce_28 = happySpecReduce_1  10 happyReduction_28
 happyReduction_28 (HappyTerminal (TkNum happy_var_1))
 	 =  HappyAbsSyn10
-		 (Num   happy_var_1
+		 (toNumC  happy_var_1
 	)
 happyReduction_28 _  = notHappyAtAll 
 
@@ -724,7 +726,7 @@ happyReduction_29 _  = notHappyAtAll
 happyReduce_30 = happySpecReduce_1  10 happyReduction_30
 happyReduction_30 (HappyTerminal (TkId  happy_var_1))
 	 =  HappyAbsSyn10
-		 (Var   happy_var_1
+		 (Var     happy_var_1
 	)
 happyReduction_30 _  = notHappyAtAll 
 
@@ -733,7 +735,7 @@ happyReduction_31 _
 	(HappyAbsSyn5  happy_var_2)
 	_
 	 =  HappyAbsSyn10
-		 (Brack happy_var_2
+		 (happy_var_2
 	)
 happyReduction_31 _ _ _  = notHappyAtAll 
 
@@ -813,66 +815,11 @@ happySeq = happyDontSeq
 parseError :: [Token] -> a
 parseError _ = error "Parse error"
 
-data S 
-    = Expr Expr
-        deriving Show
+toNumC :: Int -> Expr
+toNumC  = C . NumConstant
 
-data Expr
-    = Brack  Expr
-    | Negate Expr
-    | Pos    Expr 
-    | Plus   Expr Expr
-    | Minus  Expr Expr
-    | Mod    Expr Expr 
-    | Times  Expr Expr 
-    | Pow    Expr Expr
-    | EQ'    Expr Expr 
-    | NEQ'   Expr Expr
-    | Or     Expr Expr
-    | And    Expr Expr
-    | LT'    Expr Expr
-    | GT'    Expr Expr
-    | LE'    Expr Expr
-    | GE'    Expr Expr
-    | Num    Int
-    | Var    String
-    | BOOL   Bool
-    | FApp   String [Expr]
-        deriving Show
-
-
-
-sToTree :: S -> Tree String
-sToTree (Expr e) = exprToTree e 
-
-exprToTree :: Expr -> Tree String
-exprToTree (Negate e)  = Node {rootLabel= "-Expr", subForest=[exprToTree e]}
-exprToTree (Pos    e)  = Node {rootLabel= "+Expr", subForest=[exprToTree e]}
-exprToTree (Plus a b)  = Node {rootLabel= "+", subForest=[exprToTree a, exprToTree b]}
-exprToTree (Minus a b) = Node {rootLabel= "-", subForest=[exprToTree a, exprToTree b]}
-exprToTree (Times t t')= Node {rootLabel= "*", subForest=[exprToTree t, exprToTree t' ]}
-exprToTree (Mod t t')  = Node {rootLabel= "%", subForest=[exprToTree t, exprToTree t' ]}
-exprToTree (Pow t t')  = Node {rootLabel= "^", subForest=[exprToTree t, exprToTree t' ]}
-exprToTree (Num n)     = Node {rootLabel= show n, subForest=[]}
-exprToTree (Var v)     = Node {rootLabel= show v, subForest=[]}
-exprToTree (Brack e)   = Node {rootLabel= "(Expr)", subForest=[exprToTree e]}
-exprToTree (BOOL p)    = Node {rootLabel=show p, subForest=[]}
-exprToTree (EQ' p q)   = Node {rootLabel="=", subForest=[exprToTree p, exprToTree q]}
-exprToTree (NEQ' p q)  = Node {rootLabel="<>", subForest=[exprToTree p, exprToTree q]}
-exprToTree (LT' p q)   = Node {rootLabel="<", subForest=[exprToTree p, exprToTree q]}
-exprToTree (GT' p q)   = Node {rootLabel=">", subForest=[exprToTree p, exprToTree q]}
-exprToTree (LE' p q)   = Node {rootLabel="<=", subForest=[exprToTree p, exprToTree q]}
-exprToTree (GE' p q)   = Node {rootLabel=">=", subForest=[exprToTree p, exprToTree q]}
-exprToTree (Or p q)    = Node {rootLabel="||", subForest=[exprToTree p, exprToTree q]}
-exprToTree (And p q)   = Node {rootLabel="&&", subForest=[exprToTree p, exprToTree q]}
-exprToTree (FApp name args) = Node {rootLabel="f(..)", subForest= map exprToTree args }
-
-toPrettyS :: S -> String
-toPrettyS  = drawVerticalTree . sToTree 
-
-prettyPrintS :: S -> IO ()
-prettyPrintS = putStrLn . toPrettyS
-
+toBoolC :: Bool -> Expr
+toBoolC  = C . BConstant
 
 parse :: String -> Either [(String,Int)] String
 parse = fmap (toPrettyS . toAST)  . manyToken
