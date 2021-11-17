@@ -29,6 +29,7 @@ library
       HGrammar.HGrammar
       Lexer.Lexer
       Lib
+      Parser.Parser
       REPL.REPL
   other-modules:
       Paths_LIPS_USB
