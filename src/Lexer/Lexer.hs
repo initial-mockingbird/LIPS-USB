@@ -137,7 +137,7 @@ tkReservedWord = [TkInt, TkBool, TkType, TkFalse, TkTrue, TkLazy, TkWhile, TkIf]
 spe :: [[Char]]
 spe = op ++ sim
 
--- | Characters to ignores
+-- | Characters to ignore
 igChar :: [Char]
 igChar = [ '\n', ' ', '\t', '\r' ]
 

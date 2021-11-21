@@ -29,6 +29,8 @@ library
       HGrammar.HGrammar
       Lexer.Lexer
       Lib
+      Parser.Parser
+      Parser.Tokens
       PParser.PParser
       REPL.REPL
   other-modules:

@@ -10,10 +10,7 @@ import Prelude hiding (EQ,LT,GT)
 }
 
 
-%attributetype {TokenInfo}
-%attribute value { a }
-%attribute pos   { Int }
-%attribute seen  { [Token] }
+
 %monad { Either String}
 %name toAST
 %tokentype { Token }
