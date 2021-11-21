@@ -6,151 +6,122 @@ Stability   : experimental
 Portability : POSIX
 -}
 
+-- =========== Split a list of tokens ===========
 module Parser.Parser where
 
 import AST.AST
 import Data.Maybe
+import Parser.Tokens
 
--- | Tokens of the language
-data Token
-    = TkId String    -- ^ identifier
-    | TkNum Int      -- ^ 32 bit integer
-    | TkTrue         -- ^ > True
-    | TkFalse        -- ^ > False
-    | TkOpenPar      -- ^ @ (  @
-    | TkClosePar     -- ^ @ ) @
-    | TkPower        -- ^ @ ^ @
-    | TkPlus         -- ^ @ + @
-    | TkMinus        -- ^ @ - @
-    | TkNot          -- ^ @ ! @
-    | TkMult         -- ^ @ * @
-    | TkMod          -- ^ Mod
-    | TkLT           -- ^ @ < @
-    | TkLE           -- ^ @ <= @
-    | TkGE           -- ^ @ >= @
-    | TkGT           -- ^ @ > @
-    | TkEQ           -- ^ @ = @
-    | TkNE           -- ^ @ <> @
-    | TkAnd          -- ^ @ && @
-    | TkOr           -- ^ @ || @
-    | TkQuote        -- ^ @ ' @
-    | TkComma        -- ^ @ , @
-    | TkAssign       -- ^ @ := @
-    | TkSemicolon    -- ^ @ ; @
-    | TkYields       -- ^ @ => @
-    | TkRArrow       -- ^ @ -> @
-    | TkLArrow       -- ^ @ <- @
-    | TkOpenBracket  -- ^ @ [ @
-    | TkCloseBracket -- ^ @ ] @
-    | TkOpenBrace    -- ^ @ {  @
-    | TkCloseBrace   -- ^ @ } @
-    | TkDot          -- ^ @ . @
-    | TkColon        -- ^ @ : @
-    | TkColonColon   -- ^ @ :: @
-    | TkWhile        -- ^ @ While @
-    | TkIf           -- ^ @ If @
-    | TkInt          -- ^ @ int @
-    | TkBool         -- ^ @ bool @
-    | TkType         -- ^ @ type @
-    | TkLazy         -- ^ @ lazy @
-    deriving (Show,Eq)
 
-f x = 2*x
+-- Auxiliar Function to know the deep of the parenthesis, left assoc
+valParL :: Token -> Int
+valParL x
+    | x == TkOpenPar = -1
+    | x == TkClosePar = 1
+    | otherwise = 0
 
-g ::  Int -> Maybe Int
-g x
-    | x == 1 = (Just 1)
-    | x == 2 = (Nothing)
-    | otherwise = do
-        gval <- g(x-2)
-        return $ gval + 2
+-- Auxiliar Function to know the deep of the parenthesis, right assoc
+valParR :: Token -> Int
+valParR x = - valParL x
 
--- ======= Know if a list of token have correct parenthesis =======
+{--
+Function To know if a token is a terminal Token, depends on the
+associativity for that it use ( valParL or valParR )
+--}
+isEndToken :: Token -> (Token->Int) -> Bool
+isEndToken tk fPar = (isTkNum tk) || (isTkId tk) || ( 1 == (fPar tk))
 
-validParen :: [Token] -> Bool
-validParen li = validParenAux li 0
+-- flagToLeft lookingSymbols listOfTokens
+splitListTokens :: Int -> [Token] -> [Token] -> Maybe ( [Token], Token, [Token] )
+splitListTokens flagL s lista
+    -- Left associativity
+    | flagL == 1 = splitListTokensAux s lista [] 0 valParL
+    -- Right associativity
+    | otherwise = do 
+        (\(xs, z, ys) -> (reverse ys, z, reverse xs)) 
+        <$> splitListTokensAux s (reverse lista) [] 0 valParR
 
-validParenAux :: [Token] -> Int -> Bool
-validParenAux [] cnt = if cnt==0 then True else False
-validParenAux (x:xs) cnt
-    | cnt < 0 = False
-    | x==TkOpenPar = validParenAux xs (cnt + 1)
-    | x==TkClosePar = validParenAux xs (cnt - 1) 
-    | otherwise = validParenAux xs cnt 
-
-lista :: [Token]
-lista = [ TkOpenPar, TkOpenPar, TkClosePar, TkOpenPar, TkClosePar, TkClosePar ]
-
-lista2 = [ TkOpenPar, TkPlus, TkClosePar ]
-temp = ( init lista2, last lista2 )
-
--- =========== Split a list of tokens ===========
-
-splitListTokens :: [Token] -> [Token] -> Maybe ( [Token], Token, [Token] )
-splitListTokens s lista = splitListTokensAux s lista [] 0
-
---- splitListTokens ( Buscado, lista, [], 0 )
-splitListTokensAux :: [Token] -> [Token] -> [Token] -> Int -> Maybe ( [Token], Token, [Token] )
-splitListTokensAux s [] end cnt = Nothing
-splitListTokensAux lista sta end cnt
+--- splitListTokens ( Buscado, lista, [], 0, funcionParentesis )
+splitListTokensAux :: [Token] -> [Token] -> [Token] -> Int -> (Token -> Int) -> Maybe ( [Token], Token, [Token] )
+splitListTokensAux s [] end cnt fCnt = Nothing
+splitListTokensAux s [a] end cnt fCnt = Nothing
+splitListTokensAux listaS sta end cnt fCnt 
     | cnt < 0 = Nothing
-    | ((l `elem` lista) && (cnt==0)) = Just ( start, l, end )
-    | l == TkOpenPar = splitListTokensAux lista start ([l]++end) (cnt-1)
-    | l == TkClosePar = splitListTokensAux lista start ([l]++end) (cnt+1)
-    | otherwise = splitListTokensAux lista start ([l]++end) cnt
+    | (l `elem` listaS) && (cnt==0) && validS = Just ( start, l, end )
+    | otherwise = splitListTokensAux listaS start ([l]++end) ( cnt + fCnt(l) ) fCnt
     where 
         l = last sta
         start = init sta
-
-lista3 = [ TkOpenPar, TkPlus, TkClosePar, TkPlus, TkOpenPar, TkPlus, TkClosePar ]
-spe = [ TkPlus ]
-z = splitListTokens spe lista4
+        validS = isEndToken (last start) fCnt
 
 -- =============== Grammar ==============
-
-isTkId :: Token -> Bool
-isTkId (TkId _) = True
-isTkId _ = False
-
-isTkNum :: Token -> Bool
-isTkNum (TkNum _) = True
-isTkNum _ = False
-
-getTkNum :: Token -> Int 
-getTkNum ( TkNum x ) = x
-
-getTkId :: Token -> String
-getTkId ( TkId x ) = x
 
 firstLast::[a]->[a]
 firstLast [] = []
 firstLast [x] = []
 firstLast xs = tail (init xs)
 
-v1 :: Expr
-v1 = Var "exito"
-
-expNull :: Expr
-expNull = Var "Error"
-
 expression :: [Token] -> Maybe Expr
 expression lista
-    | isNothing z = factor lista 
+    | isNothing z = term lista 
     | (isNothing z1) || (isNothing z2) = Nothing
     | tk == TkPlus = Just $ Plus ex1 ex2
     | tk == TkMinus = Just $ Minus ex1 ex2
-    | otherwise = Nothing
     where 
-        z = splitListTokens [TkPlus, TkMinus] lista
+        z = splitListTokens 1 [TkPlus, TkMinus] lista
         (listL,tk,listR) = fromJust z 
-        z1 = expression listL
-        z2 = factor listR
+        z1 = expression listL 
+        z2 = term listR
+        ex1 = fromJust z1
+        ex2 = fromJust z2
+
+term :: [Token] -> Maybe Expr
+term lista
+    | isNothing z = unaryExpression lista 
+    | (isNothing z1) || (isNothing z2) = Nothing
+    | tk == TkMult = Just $ Times ex1 ex2
+    | tk == TkMod = Just $ Mod ex1 ex2
+    where 
+        z = splitListTokens 1 [TkMult, TkMod] lista
+        (listL,tk,listR) = fromJust z 
+        z1 = term listL 
+        z2 = unaryExpression listR
+        ex1 = fromJust z1
+        ex2 = fromJust z2
+
+
+unaryExpression :: [Token] -> Maybe Expr
+unaryExpression [] = powExpression []
+unaryExpression (z:lista) 
+    | z == TkNot = do
+        temp <- unaryExpression lista
+        Just $ Negate temp
+    | z == TkPlus = do
+        temp <- unaryExpression lista
+        Just $ Pos temp
+    | z == TkMinus = do 
+        temp <- unaryExpression lista
+        Just $ Pos temp -- CAMBIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAR
+    | otherwise = powExpression ([z]++lista)
+
+powExpression :: [Token] -> Maybe Expr
+powExpression lista
+    | isNothing z = factor lista 
+    | (isNothing z1) || (isNothing z2) = Nothing
+    | tk == TkPower = Just $ Pow ex1 ex2
+    where 
+        -- Right associativity
+        z = splitListTokens 0 [TkPower] lista
+        (listL,tk,listR) = fromJust z 
+        z1 = factor listL 
+        z2 = powExpression listR
         ex1 = fromJust z1
         ex2 = fromJust z2
 
 factor :: [Token] -> Maybe Expr 
+factor [] = Nothing
 factor lista 
-    | (length lista) == 0 = Nothing
     | ((head lista) == TkOpenPar) && ((last lista) == TkClosePar) = expression $ firstLast lista
     | (length lista) /= 1 = Nothing
     | isTkNum z = Just $ C $ NumConstant $ getTkNum z
@@ -158,6 +129,21 @@ factor lista
     | otherwise = Nothing 
     where z = head lista
 
-lista4 = [ TkId "var1", TkPlus, TkOpenPar, TkNum 2, TkPlus, TkNum 13, TkClosePar ]
---prettyPrintS $ E $ fromJust $ factor lista4
+-- =============== Test cases ==============
 
+--lista4 = [ TkNum 3, TkPlus, TkOpenPar, TkNum 2, TkPlus, TkNum 13, TkClosePar ]
+--lista4 = [ TkOpenPar, TkNum 2, TkPlus, TkNum 13, TkClosePar, TkPlus, TkId "var" ]
+--lista4 = [ TkOpenPar, TkOpenPar, TkNum 2, TkPlus, TkNum 13, TkClosePar, TkClosePar, TkPlus, TkNum 24 ]
+
+--lista4 = [ TkOpenPar, TkOpenPar, TkNum 2, TkPlus, TkNum 13, TkClosePar, TkClosePar, TkPlus, TkNum 24 ]
+--lista4 = [ TkNum 1, TkPower, TkNum 2, TkPower, TkNum 3 ]
+--lista4 = [ TkNum 1, TkPlus, TkNum 2, TkPlus, TkOpenPar, TkNum 3, TkPower, TkNum 5, TkClosePar, TkPower, TkNum 4 ]
+
+--lista4 = [ TkNum 1, TkPlus, TkMinus, TkPlus, TkNum 4 ]
+
+lista4 = [ TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6 ]
+
+--prettyPrintS $ E $ fromJust $ expression lista4
+
+-- Quelle galère
+-- ''  'E'+'E'+''E''  '' 

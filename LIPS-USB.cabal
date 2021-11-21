@@ -30,6 +30,7 @@ library
       Lexer.Lexer
       Lib
       Parser.Parser
+      Parser.Tokens
       REPL.REPL
   other-modules:
       Paths_LIPS_USB
