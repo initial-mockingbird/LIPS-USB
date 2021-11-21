@@ -1,5 +1,5 @@
 {
-module HGrammar.HGrammar (toAST, sToTree, prettyPrintS, parse' ) where
+module HGrammar.HGrammar (toAST, sToTree, prettyPrintS, parse ) where
 
 import Data.Char
 import Lexer.Lexer (Token(..), manyToken)
@@ -9,6 +9,12 @@ import AST.AST
 import Prelude hiding (EQ,LT,GT)
 }
 
+
+%attributetype {TokenInfo}
+%attribute value { a }
+%attribute pos   { Int }
+%attribute seen  { [Token] }
+%monad { Either String}
 %name toAST
 %tokentype { Token }
 %error {parseError}
@@ -53,7 +59,7 @@ import Prelude hiding (EQ,LT,GT)
 %nonassoc '>' '<' '>=' '<='
 %left '+' '-'
 %left '*' '%'
-%left NEG PLS
+%nonassoc NEG PLS
 %right '^'
 
 %%
@@ -81,6 +87,7 @@ Expr
     | Expr '&&' Expr            { And   $1 $3 }
     | TkId                      { Var   $1    }
     | '(' Expr ')'              {       $2    }
+    | '`' Expr '`'              { Lazy  $2    }
     | FApp                      {       $1    }
     | Constant                  {       $1    }
 
@@ -92,6 +99,7 @@ Constant
 FApp
     : TkId '(' Args ')'         { FApp  $1 $3 }
 
+
 Args
     : {- empty -}               { [] }
     | NEArgs                    { reverse $1 }
@@ -99,6 +107,7 @@ Args
 NEArgs 
     : Expr                      { $1 : []  }
     | NEArgs  ',' Expr          { $3 : $1 }
+    | NEArgs  ','               { % Left "Parse error on argument list. "}
 
 Unary
     : TkNum                     { toNumC  $1 }
@@ -107,8 +116,9 @@ Unary
     | '(' Expr ')'              {         $2 }
 
 {
-parseError :: [Token] -> a
-parseError _ = error "Parse error"
+parseError :: [Token] -> Either String a
+parseError (fault:_) = Left $ "Parse error: " ++ show fault
+parseError []        = Left "Lambda does not belong to the language"
 
 toNumC :: Int -> Expr
 toNumC  = C . NumConstant
@@ -116,15 +126,25 @@ toNumC  = C . NumConstant
 toBoolC :: Bool -> Expr
 toBoolC  = C . BConstant
 
-parse :: String -> Either [(String,Int)] String
-parse = fmap (toPrettyS . toAST)  . manyToken
+parse :: String -> String
+parse x = 
+    let 
+        manyToken' :: String -> Either String [Token]
+        manyToken' x' = case manyToken x' of
+            Left es -> Left $ show es
+            Right s -> Right s
+        
+        aux = do
+            r1 <- manyToken' x  
+            r2 <- toAST r1
+            return $ toPrettyS r2 
+    in 
+        case aux of
+            Left e  -> e
+            Right s -> s
+        
+            
 
-parse' :: String -> IO ()
-parse' s = do
-    let ast = parse s
-    case ast of
-        Right res -> putStrLn res
-        Left _    -> putStrLn "Error"
 
 }
 

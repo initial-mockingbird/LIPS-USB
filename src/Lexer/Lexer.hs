@@ -52,7 +52,50 @@ data Token
     | TkBool         -- ^ @ bool @
     | TkType         -- ^ @ type @
     | TkLazy         -- ^ @ lazy @
-    deriving (Show,Eq)
+    deriving Eq
+
+
+instance Show Token where
+    show (TkId var)     = var    
+    show (TkNum n)      = show n
+    show TkTrue         = "True"   
+    show TkFalse        = "False"   
+    show TkOpenPar      = "("   
+    show TkClosePar     = ")"   
+    show TkPower        = "^"   
+    show TkPlus         = "+"   
+    show TkMinus        = "-"   
+    show TkNot          = "!"   
+    show TkMult         = "*"   
+    show TkMod          = "Mod"   
+    show TkLT           = "<"   
+    show TkLE           = "<="   
+    show TkGE           = ">="   
+    show TkGT           = ">"   
+    show TkEQ           = "="   
+    show TkNE           = "<>"   
+    show TkAnd          = "&&"   
+    show TkOr           = "||"   
+    show TkQuote        = "'"   
+    show TkComma        = ","   
+    show TkAssign       = ":="   
+    show TkSemicolon    = ";"  
+    show TkYields       = "=>"  
+    show TkRArrow       = "->"  
+    show TkLArrow       = "<-"  
+    show TkOpenBracket  = "["
+    show TkCloseBracket = "]"
+    show TkOpenBrace    = "{"
+    show TkCloseBrace   = "}"
+    show TkDot          = "."
+    show TkColon        = ":"
+    show TkColonColon   = "::"
+    show TkWhile        = "while"
+    show TkIf           = "if"
+    show TkInt          = "int"
+    show TkBool         = "bool"
+    show TkType         = "type"
+    show TkLazy         = "lazy"
 
 -- | Auxiliary type, will provide a "logged" version of Either
 newtype LEither a = L (Either [(String,Int)] a)

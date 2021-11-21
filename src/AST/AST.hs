@@ -4,6 +4,7 @@ import Lexer.Lexer (Token(..), manyToken)
 import Data.Tree  
 import Data.Tree.Pretty (drawVerticalTree)
 import Prelude hiding (EQ,LT,GT)
+import Data.List (intercalate)
 
 data S = A Action | E Expr
 
@@ -81,8 +82,27 @@ exprToTree (Lazy e)    = Node {rootLabel= "'Expr'", subForest=[exprToTree e]}
 exprToTree (C c)       = case c of
         BConstant b   -> Node {rootLabel= show b  , subForest=[]}
         NumConstant n -> Node {rootLabel= show n  , subForest=[]}
-exprToTree (FApp name args) = Node {rootLabel="f(..)", subForest= map exprToTree args }
+exprToTree (FApp name args) = Node {rootLabel="f(..)", subForest= name' : map exprToTree args }
+    where
+        name' = Node {rootLabel= name , subForest=[]}
 
+
+newtype TS = T (Tree String)
+
+instance Show TS where
+    show (T Node{rootLabel=r , subForest=sub}) = r ++ "(" ++ intercalate "," (fmap show sub) ++ ")"
+
+
+instance Show Action where
+    show action = show $ T $ actionToTree action
+
+instance Show Expr where
+    show expr = show $ T $ exprToTree expr
+
+
+instance Show S where
+    show (A action) = show action
+    show (E expr)   = show expr 
 
 toPrettyS :: S -> String
 toPrettyS  = drawVerticalTree . sToTree 
