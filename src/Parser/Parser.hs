@@ -62,6 +62,62 @@ firstLast [] = []
 firstLast [x] = []
 firstLast xs = tail (init xs)
 
+logicOr :: [Token] -> Maybe Expr
+logicOr lista
+    | isNothing z = logicAnd lista 
+    | (isNothing z1) || (isNothing z2) = Nothing
+    | tk == TkOr = Just $ Or ex1 ex2
+    where 
+        z = splitListTokens 1 [TkOr] lista
+        (listL,tk,listR) = fromJust z 
+        z1 = logicOr listL 
+        z2 = logicAnd listR
+        ex1 = fromJust z1
+        ex2 = fromJust z2
+
+logicAnd :: [Token] -> Maybe Expr
+logicAnd lista
+    | isNothing z = equality lista 
+    | (isNothing z1) || (isNothing z2) = Nothing
+    | tk == TkAnd = Just $ And ex1 ex2
+    where 
+        z = splitListTokens 1 [TkAnd] lista
+        (listL,tk,listR) = fromJust z 
+        z1 = logicAnd listL 
+        z2 = equality listR
+        ex1 = fromJust z1
+        ex2 = fromJust z2
+
+equality :: [Token] -> Maybe Expr
+equality lista
+    | isNothing z = comparison lista 
+    | (isNothing z1) || (isNothing z2) = Nothing
+    | tk == TkEQ = Just $ AST.AST.EQ ex1 ex2
+    | tk == TkNE = Just $ NEQ ex1 ex2
+    where 
+        z = splitListTokens 1 [TkEQ, TkNE] lista
+        (listL,tk,listR) = fromJust z 
+        z1 = equality listL 
+        z2 = comparison listR
+        ex1 = fromJust z1
+        ex2 = fromJust z2
+
+comparison :: [Token] -> Maybe Expr
+comparison lista
+    | isNothing z = expression lista 
+    | (isNothing z1) || (isNothing z2) = Nothing
+    | tk == TkLT = Just $ AST.AST.LT ex1 ex2
+    | tk == TkLE = Just $ LE ex1 ex2
+    | tk == TkGT = Just $ AST.AST.GT ex1 ex2
+    | tk == TkGE = Just $ GE ex1 ex2
+    where 
+        z = splitListTokens 1 [TkLT, TkLE, TkGT, TkGE] lista
+        (listL,tk,listR) = fromJust z 
+        z1 = comparison listL 
+        z2 = expression listR
+        ex1 = fromJust z1
+        ex2 = fromJust z2
+
 expression :: [Token] -> Maybe Expr
 expression lista
     | isNothing z = term lista 
@@ -122,7 +178,7 @@ powExpression lista
 factor :: [Token] -> Maybe Expr 
 factor [] = Nothing
 factor lista 
-    | ((head lista) == TkOpenPar) && ((last lista) == TkClosePar) = expression $ firstLast lista
+    | ((head lista) == TkOpenPar) && ((last lista) == TkClosePar) = logicOr $ firstLast lista
     | (length lista) /= 1 = Nothing
     | isTkNum z = Just $ C $ NumConstant $ getTkNum z
     | isTkId z = Just $ Var $ getTkId z
@@ -141,7 +197,20 @@ factor lista
 
 --lista4 = [ TkNum 1, TkPlus, TkMinus, TkPlus, TkNum 4 ]
 
-lista4 = [ TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6 ]
+--lista4 = [ TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6 ]
+
+--lista4 = [TkNum 1, TkPlus, TkNum 2, TkPlus, TkNum 3]
+
+--lista4 = [TkNum 1, TkPlus, TkNum 6, TkGE, TkNum 5]
+--lista5 = [TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6,  TkGE, TkNum 5]
+--lista6 = [TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6,  TkLE, TkNum 5, TkMult, TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6]
+
+--lista6 = [TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6,  TkNE, TkNum 5, TkMult, TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6]
+--lista7 = [TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6,  TkNE, TkNum 5, TkMult, TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6, TkAnd, TkNum 5, TkGT, TkNum 1]
+
+lista7 = [TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6,  TkNE, TkNum 5, TkMult, TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6, TkOr, TkNum 5, TkGT, TkNum 1]
+lista8 = [TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6,  TkNE, TkNum 5, TkMult, TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6, TkOr, TkNum 5, TkGT, TkNum 1, TkAnd, TkId "a", TkEQ, TkId "b"]
+lista9 = [TkOpenPar, TkId "a", TkGE, TkId "b", TkOr, TkId "c", TkEQ, TkId "b", TkClosePar, TkAnd, TkOpenPar, TkId "d", TkLT, TkId "b", TkOr, TkId "a", TkNE, TkId "c", TkClosePar]
 
 --prettyPrintS $ E $ fromJust $ expression lista4
 
