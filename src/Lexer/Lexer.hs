@@ -125,7 +125,7 @@ tkOp = [ TkOpenPar, TkClosePar, TkPower, TkPlus, TkMinus, TkNot, TkMult, TkMod, 
 
 -- | Symbols of LIPS-USB language
 sim :: [[Char]]
-sim = ["‘",",",":=",";","=>","->","<-","[","]","{","}",".",":","::"]
+sim = ["'",",",":=",";","=>","->","<-","[","]","{","}",".",":","::"]
 tkSim = [ TkQuote, TkComma, TkAssign, TkSemicolon, TkYields, TkRArrow, TkLArrow, TkOpenBracket, TkCloseBracket, TkOpenBrace, TkCloseBrace, TkDot, TkColon, TkColonColon ]
 
 -- | Reserverd words of LIPS-USB language

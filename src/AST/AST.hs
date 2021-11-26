@@ -10,7 +10,8 @@ data S = A Action | E Expr
 
 data Expr
     = Negate Expr
-    | Pos    Expr 
+    | Pos    Expr
+    | Not    Expr
     | Plus   Expr Expr
     | Minus  Expr Expr
     | Mod    Expr Expr 
@@ -62,14 +63,15 @@ actionToTree (Assignment v e) = Node {rootLabel= ":=", subForest=[n',exprToTree 
         n' = Node {rootLabel= v, subForest=[]}
 
 exprToTree :: Expr -> Tree String
-exprToTree (Negate e)  = Node {rootLabel= "-Expr" , subForest=[exprToTree e]}
-exprToTree (Pos    e)  = Node {rootLabel= "+Expr" , subForest=[exprToTree e]}
+exprToTree (Negate e)  = Node {rootLabel= "UMinus" , subForest=[exprToTree e]}
+exprToTree (Pos    e)  = Node {rootLabel= "UPlusr" , subForest=[exprToTree e]}
+exprToTree (Not    e)  = Node {rootLabel= "!" , subForest=[exprToTree e]}
 exprToTree (Plus a b)  = Node {rootLabel= "+"     , subForest=[exprToTree a, exprToTree b]}
 exprToTree (Minus a b) = Node {rootLabel= "-"     , subForest=[exprToTree a, exprToTree b]}
 exprToTree (Times t t')= Node {rootLabel= "*"     , subForest=[exprToTree t, exprToTree t' ]}
 exprToTree (Mod t t')  = Node {rootLabel= "%"     , subForest=[exprToTree t, exprToTree t' ]}
 exprToTree (Pow t t')  = Node {rootLabel= "^"     , subForest=[exprToTree t, exprToTree t' ]}
-exprToTree (Var v)     = Node {rootLabel= show v  , subForest=[]}
+exprToTree (Var v)     = Node {rootLabel= "Var " ++ v  , subForest=[]}
 exprToTree (EQ p q)    = Node {rootLabel= "="     , subForest=[exprToTree p, exprToTree q]}
 exprToTree (NEQ p q)   = Node {rootLabel= "<>"    , subForest=[exprToTree p, exprToTree q]}
 exprToTree (LT p q)    = Node {rootLabel= "<"     , subForest=[exprToTree p, exprToTree q]}
@@ -78,11 +80,11 @@ exprToTree (LE p q)    = Node {rootLabel= "<="    , subForest=[exprToTree p, exp
 exprToTree (GE p q)    = Node {rootLabel= ">="    , subForest=[exprToTree p, exprToTree q]}
 exprToTree (Or p q)    = Node {rootLabel= "||"    , subForest=[exprToTree p, exprToTree q]}
 exprToTree (And p q)   = Node {rootLabel= "&&"    , subForest=[exprToTree p, exprToTree q]}
-exprToTree (Lazy e)    = Node {rootLabel= "'Expr'", subForest=[exprToTree e]}
+exprToTree (Lazy e)    = Node {rootLabel= "LazyE", subForest=[exprToTree e]}
 exprToTree (C c)       = case c of
         BConstant b   -> Node {rootLabel= show b  , subForest=[]}
         NumConstant n -> Node {rootLabel= show n  , subForest=[]}
-exprToTree (FApp name args) = Node {rootLabel="f(..)", subForest= name' : map exprToTree args }
+exprToTree (FApp name args) = Node {rootLabel="FApp", subForest= name' : map exprToTree args }
     where
         name' = Node {rootLabel= name , subForest=[]}
 
@@ -90,7 +92,9 @@ exprToTree (FApp name args) = Node {rootLabel="f(..)", subForest= name' : map ex
 newtype TS = T (Tree String)
 
 instance Show TS where
-    show (T Node{rootLabel=r , subForest=sub}) = r ++ "(" ++ intercalate "," (fmap show sub) ++ ")"
+    show (T Node{rootLabel=r , subForest=[]})  = r
+    show (T Node{rootLabel=r , subForest=sub}) = r ++ "(" ++ intercalate "," (fmap (show . T) sub) ++ ")"
+    
 
 
 instance Show Action where
@@ -109,3 +113,6 @@ toPrettyS  = drawVerticalTree . sToTree
 
 prettyPrintS :: S -> IO ()
 prettyPrintS = putStrLn . toPrettyS
+
+showAST :: S -> String
+showAST = show

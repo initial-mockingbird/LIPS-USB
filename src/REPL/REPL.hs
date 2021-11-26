@@ -40,7 +40,8 @@ import           Text.Parsec            (ParseError, ParsecT, SourcePos,
 import           Text.Parsec.Char       (alphaNum, anyChar, char, crlf,
                                          endOfLine, newline, spaces, string)
 import           Text.Parsec.Error      (errorMessages, messageString)
-
+import qualified  HGrammar.HGrammar as H
+import AST.AST
 ------------------------------
 -- Types
 ------------------------------
@@ -174,8 +175,12 @@ parseSpecial = char '.' >> foldl1 (<|>)
     [ try parseFailure >> getState 
     , try parseReset   >> getState 
     , try parseQuit 
+    , try parseParse >> getState 
     , char 'l' >> (parseLex <|> parseLoad ) >> getState 
     ] <?> "ERROR: bad command"
+
+
+
 
 -- | A parser for the @.failed@ command is just a parser for "failed". Prints to the stdout
 -- the errors.
@@ -237,6 +242,23 @@ parseLex = do
             mapM_ (liftIO . putStrLn . showREPLError) mappedTriples
         Right tokens          -> liftIO $ putStrLn $ showTokenPos args tokens 
 
+-- | A parser for the @.parse@ command is just a parser for the string "ast", followed
+-- by the execution of the parse command.
+parseParse :: ParsecT String SessionState IO ()
+parseParse = do
+    string "ast"
+    spaces
+    pos'' <- getPosition 
+    args  <- parseArg
+    case H.parse args of
+        Left (error,pos) -> do
+            f <- fromMaybe "." . actualFile <$> getState 
+            let pos' = setSourceColumn pos'' pos
+            let mappedTriples =  (\ (errMsg) -> (f,pos' ,errMsg)) error
+            putErr mappedTriples
+            (liftIO . putStrLn . showREPLError) mappedTriples
+        Right  s -> liftIO $ putStrLn $ showAST s
+        
 
 -- | A parser for the arguments of a @.load@ or @.lex@ is just parsing till
 -- we reach either an end of line or an end of file.

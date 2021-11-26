@@ -6,12 +6,13 @@ import Lexer.Lexer (Token(..), manyToken)
 import Data.Tree  
 import Data.Tree.Pretty (drawVerticalTree)
 import AST.AST
+import Data.List (intercalate)
 import Prelude hiding (EQ,LT,GT)
 }
 
 
 
-%monad { Either String}
+%monad { Either (String,Int)}
 %name toAST
 %tokentype { Token }
 %error {parseError}
@@ -56,20 +57,35 @@ import Prelude hiding (EQ,LT,GT)
 %nonassoc '>' '<' '>=' '<='
 %left '+' '-'
 %left '*' '%'
-%nonassoc NEG PLS
+%nonassoc NEG PLS '!'
 %right '^'
 
 %%
-
+ 
 
 S 
-    : Expr                   { E   $1 }
+    : Expr    ';'               { E   $1 }
+    | Action  ';'               { A   $1 }
     
+Action 
+    : Declaration            {$1}
+    | Assignment             {$1}
 
+Declaration
+    : Type Assignment        { (\(Assignment s e) -> Declaration $1 s e )  $2 }
+
+Type 
+    : int         {LInt     }
+    | bool        {LBool    }
+    | lazy Type   {LLazy $2 }
+
+Assignment 
+    : TkId ':=' Expr {Assignment $1 $3}
 
 Expr
-    : '-' Unary %prec NEG       { Negate   $2 }
-    | '+' Unary %prec PLS       { Pos      $2 }
+    : '-' Expr %prec NEG       { Negate   $2 }
+    | '+' Expr %prec PLS       { Pos      $2 }
+    | '!' Expr                 { Not      $2 }
     | Expr '=' Expr             { EQ    $1 $3 }
     | Expr '<>' Expr            { NEQ   $1 $3 }
     | Expr '+' Expr             { Plus  $1 $3 }
@@ -104,7 +120,9 @@ Args
 NEArgs 
     : Expr                      { $1 : []  }
     | NEArgs  ',' Expr          { $3 : $1 }
-    | NEArgs  ','               { % Left "Parse error on argument list. "}
+    | NEArgs  ','               { % Left ("Parse error on argument list. ", 0)}
+
+
 
 Unary
     : TkNum                     { toNumC  $1 }
@@ -113,9 +131,9 @@ Unary
     | '(' Expr ')'              {         $2 }
 
 {
-parseError :: [Token] -> Either String a
-parseError (fault:_) = Left $ "Parse error: " ++ show fault
-parseError []        = Left "Lambda does not belong to the language"
+parseError :: [Token] -> Either (String,Int) a
+parseError fault = Left $ ("Parse error at expression: " ++ intercalate " " (map show fault), length fault)
+parseError []    = Left ("Lambda does not belong to the language",-1)
 
 toNumC :: Int -> Expr
 toNumC  = C . NumConstant
@@ -123,25 +141,36 @@ toNumC  = C . NumConstant
 toBoolC :: Bool -> Expr
 toBoolC  = C . BConstant
 
-parse :: String -> String
-parse x = 
-    let 
-        manyToken' :: String -> Either String [Token]
-        manyToken' x' = case manyToken x' of
-            Left es -> Left $ show es
-            Right s -> Right s
-        
-        aux = do
-            r1 <- manyToken' x  
-            r2 <- toAST r1
-            return $ toPrettyS r2 
-    in 
-        case aux of
-            Left e  -> e
-            Right s -> s
-        
-            
 
+parseLine' :: Int -> [Token] -> Either (String,Int) S
+parseLine' n tks = case toAST tks of
+    Left (errMsg,remanent) -> Left (errMsg,n-remanent)
+    s                      -> s
+
+parse :: String -> Either (String,Int) S
+parse input = do 
+    let 
+        
+        manyToken' :: String -> Either (String,Int) [Token]
+        manyToken' x' = case manyToken x' of
+            Left (e:_)  -> Left e
+            (Right tks) -> Right tks 
+        
+        toAST' :: [Token] -> Either (String,Int) S 
+        toAST' tks = case parseLine' (length tks) tks of
+            Left (err,n) -> Left (err ++ " at token: " ++ show n,n)
+            ast          -> ast
+        
+    tokens' <- manyToken' input
+    toAST' tokens'
+             
+
+
+parse' :: String -> String
+parse' x = case parse x of
+    Left (errMsg,_) -> errMsg
+    Right ast       -> toPrettyS ast
+        
 
 }
 
