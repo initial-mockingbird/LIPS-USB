@@ -4,15 +4,27 @@ Description : Provides necessary tools for lexing.
 Maintainer  : 15-11139@usb.ve, 16-10400@usb.ve 17-10538@usb.ve
 Stability   : experimental
 Portability : POSIX
+
+This file implement a parser top-down, it should be used with: 
+stack ghci 
+:l Parser.Parser
+putStrLn $ printASR_parserAMStart "1 + 2*3^4^5^6^(1+2+3+4)"
+
+This parser it's not the one used in the REPL
+This parser is a naive implementation, it's our first approach
+to the parser problem. Also this parser identify only the 
+grammar in the file grammarAMStart.txt
 -}
 
--- =========== Split a list of tokens ===========
 module Parser.Parser where
 
 import AST.AST
 import Data.Maybe
+import Data.Either
 import Parser.Tokens
+import Lexer.Lexer
 
+-- =========== Split a list of tokens ===========
 
 -- Auxiliar Function to know the deep of the parenthesis, left assoc
 valParL :: Token -> Int
@@ -32,8 +44,18 @@ associativity for that it use ( valParL or valParR )
 isEndToken :: Token -> (Token->Int) -> Bool
 isEndToken tk fPar = (isTkNum tk) || (isTkId tk) || ( 1 == (fPar tk))
 
+{--
+This function split a list of token in a tuple ( listL, tk, listR )
+search for a token 'tk' in the parameter s (second) form right
+to left if flagL is true (left associativity), if it's not able
+to make the split return Nothing
+--}
 -- flagToLeft lookingSymbols listOfTokens
-splitListTokens :: Int -> [Token] -> [Token] -> Maybe ( [Token], Token, [Token] )
+splitListTokens :: 
+    Int             -- Left associativity ?
+    -> [Token]      -- list of token operators, example: [+,-]
+    -> [Token]      -- list of token to split
+    -> Maybe ( [Token], Token, [Token] ) -- RETURN Maybe Tuble
 splitListTokens flagL s lista
     -- Left associativity
     | flagL == 1 = splitListTokensAux s lista [] 0 valParL
@@ -42,7 +64,13 @@ splitListTokens flagL s lista
         (\(xs, z, ys) -> (reverse ys, z, reverse xs)) 
         <$> splitListTokensAux s (reverse lista) [] 0 valParR
 
---- splitListTokens ( Buscado, lista, [], 0, funcionParentesis )
+{--
+This is an auxiliar function to  splitListTokens
+it should be called with: 
+splitListTokens ( LookingFor, listTk, listTokensToSplit, [], 0, functionParenthesis )
+If it is badly parentized return nothing or if dont is able to 
+make the split
+--}
 splitListTokensAux :: [Token] -> [Token] -> [Token] -> Int -> (Token -> Int) -> Maybe ( [Token], Token, [Token] )
 splitListTokensAux s [] end cnt fCnt = Nothing
 splitListTokensAux s [a] end cnt fCnt = Nothing
@@ -57,11 +85,17 @@ splitListTokensAux listaS sta end cnt fCnt
 
 -- =============== Grammar ==============
 
+{--
+This function erase the first and last element of a list
+--}
 firstLast::[a]->[a]
 firstLast [] = []
 firstLast [x] = []
 firstLast xs = tail (init xs)
 
+{--
+Try to make a AST with root in TkOr
+--}
 logicOr :: [Token] -> Maybe Expr
 logicOr lista
     | isNothing z = logicAnd lista 
@@ -75,6 +109,9 @@ logicOr lista
         ex1 = fromJust z1
         ex2 = fromJust z2
 
+{--
+Try to make a AST with root in TkAnd
+--}
 logicAnd :: [Token] -> Maybe Expr
 logicAnd lista
     | isNothing z = equality lista 
@@ -88,6 +125,9 @@ logicAnd lista
         ex1 = fromJust z1
         ex2 = fromJust z2
 
+{--
+Try to make a AST with root in TkEQ or TkNE
+--}
 equality :: [Token] -> Maybe Expr
 equality lista
     | isNothing z = comparison lista 
@@ -102,6 +142,9 @@ equality lista
         ex1 = fromJust z1
         ex2 = fromJust z2
 
+{--
+Try to make a AST with root in a token in [ TkLT, TkLE, TkGT, TkGE ]
+--}
 comparison :: [Token] -> Maybe Expr
 comparison lista
     | isNothing z = expression lista 
@@ -118,6 +161,9 @@ comparison lista
         ex1 = fromJust z1
         ex2 = fromJust z2
 
+{--
+Try to make a AST with root in a token in [TkPlus, TkMinus]
+--}
 expression :: [Token] -> Maybe Expr
 expression lista
     | isNothing z = term lista 
@@ -132,6 +178,9 @@ expression lista
         ex1 = fromJust z1
         ex2 = fromJust z2
 
+{--
+Try to make a AST with root in a token in [TkMult, TkMod]
+--}
 term :: [Token] -> Maybe Expr
 term lista
     | isNothing z = unaryExpression lista 
@@ -146,21 +195,27 @@ term lista
         ex1 = fromJust z1
         ex2 = fromJust z2
 
-
+{--
+Try to make a AST with root in a token in [TkNot, TkPlus, TkMinus]
+--}
 unaryExpression :: [Token] -> Maybe Expr
 unaryExpression [] = powExpression []
 unaryExpression (z:lista) 
     | z == TkNot = do
         temp <- unaryExpression lista
-        Just $ Negate temp
+        Just $ Not temp
     | z == TkPlus = do
         temp <- unaryExpression lista
         Just $ Pos temp
     | z == TkMinus = do 
         temp <- unaryExpression lista
-        Just $ Pos temp -- CAMBIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAR
+        Just $ Negate temp
     | otherwise = powExpression ([z]++lista)
 
+{--
+Try to make a AST with root in a token in [TkPower]
+( is right associative )
+--}
 powExpression :: [Token] -> Maybe Expr
 powExpression lista
     | isNothing z = factor lista 
@@ -175,6 +230,9 @@ powExpression lista
         ex1 = fromJust z1
         ex2 = fromJust z2
 
+{--
+Try to make a AST which only cosist of TkNum, TkId or (logicOr)
+--}
 factor :: [Token] -> Maybe Expr 
 factor [] = Nothing
 factor lista 
@@ -184,6 +242,23 @@ factor lista
     | isTkId z = Just $ Var $ getTkId z
     | otherwise = Nothing 
     where z = head lista
+
+-- =============== Main Functions ===============
+
+{--
+This function call the lexer to tranform a string to a list of tokens
+and if the string is correct lexicograficaly then will try to 
+construct the AST
+--}
+printASR_parserAMStart :: String -> String
+printASR_parserAMStart myStr
+    | isLeft z = "Error lexicografico"
+    | isNothing myTree = "Error al contruir el arbol sintactico"
+    | otherwise = toPrettyS $ E $ fromJust $ myTree
+    where 
+        z = manyToken myStr
+        listTkLexer = fromRight [] z 
+        myTree = logicOr listTkLexer
 
 -- =============== Test cases ==============
 
@@ -197,7 +272,7 @@ factor lista
 
 --lista4 = [ TkNum 1, TkPlus, TkMinus, TkPlus, TkNum 4 ]
 
---lista4 = [ TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6 ]
+-- lista4 = [ TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6 ]
 
 --lista4 = [TkNum 1, TkPlus, TkNum 2, TkPlus, TkNum 3]
 
@@ -208,11 +283,6 @@ factor lista
 --lista6 = [TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6,  TkNE, TkNum 5, TkMult, TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6]
 --lista7 = [TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6,  TkNE, TkNum 5, TkMult, TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6, TkAnd, TkNum 5, TkGT, TkNum 1]
 
-lista7 = [TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6,  TkNE, TkNum 5, TkMult, TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6, TkOr, TkNum 5, TkGT, TkNum 1]
-lista8 = [TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6,  TkNE, TkNum 5, TkMult, TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6, TkOr, TkNum 5, TkGT, TkNum 1, TkAnd, TkId "a", TkEQ, TkId "b"]
-lista9 = [TkOpenPar, TkId "a", TkGE, TkId "b", TkOr, TkId "c", TkEQ, TkId "b", TkClosePar, TkAnd, TkOpenPar, TkId "d", TkLT, TkId "b", TkOr, TkId "a", TkNE, TkId "c", TkClosePar]
-
---prettyPrintS $ E $ fromJust $ expression lista4
-
--- Quelle galère
--- ''  'E'+'E'+''E''  '' 
+-- lista7 = [TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6,  TkNE, TkNum 5, TkMult, TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6, TkOr, TkNum 5, TkGT, TkNum 1]
+-- lista8 = [TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6,  TkNE, TkNum 5, TkMult, TkNum 1, TkPlus, TkNum 2, TkMult, TkNum 3, TkMult, TkOpenPar, TkNum 4, TkPlus, TkNum 5, TkClosePar, TkMult, TkNum 6, TkOr, TkNum 5, TkGT, TkNum 1, TkAnd, TkId "a", TkEQ, TkId "b"]
+-- lista9 = [TkOpenPar, TkId "a", TkGE, TkId "b", TkOr, TkId "c", TkEQ, TkId "b", TkClosePar, TkAnd, TkOpenPar, TkId "d", TkLT, TkId "b", TkOr, TkId "a", TkNE, TkId "c", TkClosePar]

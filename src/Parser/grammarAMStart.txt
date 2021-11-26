@@ -1,0 +1,42 @@
+logicOr:
+	logicOr || logicAnd
+	
+logicAnd:
+	logicAnd && equality
+
+equality
+	equality = comparison
+	equality <> comparison
+
+comparison
+	comparison < expression
+	comparison <= expression
+	comparison >= expression
+	comparison > expression
+
+expression:
+	| expression + term
+	| expression - term
+	| term
+
+term:
+	| term * unaryExpression
+	| term / unaryExpression
+	| term % unaryExpression
+	| unaryExpression
+
+unaryExpression:
+	 | ! unaryExpression
+	 | + unaryExpression
+	 | - unaryExpression
+	 | powExpression
+
+powExpression:
+	| factor ^ powExpression
+	| factor
+
+factor:
+	( E )
+	| TkNum
+	| TkId
+

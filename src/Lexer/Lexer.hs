@@ -54,7 +54,6 @@ data Token
     | TkLazy         -- ^ @ lazy @
     deriving Eq
 
-
 instance Show Token where
     show (TkId var)     = var    
     show (TkNum n)      = show n
@@ -120,8 +119,8 @@ instance Applicative LEither where
 
 -- | Operators of LIPS-USB language
 op :: [[Char]]
-op = ["(",")","^","+","-","!","*","%","<","<=",">=",">","=","&&","||"]
-tkOp = [ TkOpenPar, TkClosePar, TkPower, TkPlus, TkMinus, TkNot, TkMult, TkMod, TkLT, TkLE, TkGE, TkGT, TkEQ, TkAnd, TkOr ]
+op = ["(",")","^","+","-","!","*","%","<","<=",">=",">","=","&&","||","<>"]
+tkOp = [ TkOpenPar, TkClosePar, TkPower, TkPlus, TkMinus, TkNot, TkMult, TkMod, TkLT, TkLE, TkGE, TkGT, TkEQ, TkAnd, TkOr, TkNE]
 
 -- | Symbols of LIPS-USB language
 sim :: [[Char]]
