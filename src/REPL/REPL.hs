@@ -36,11 +36,13 @@ import           Text.Parsec            (ParseError, ParsecT, SourcePos,
                                          notFollowedBy, optional, parse,
                                          runParserT, sepEndBy, setSourceColumn,
                                          sourceLine, sourceName, spaces, string,
-                                         try, (<?>), (<|>))
+                                         try, (<?>), (<|>), setPosition)
 import           Text.Parsec.Char       (alphaNum, anyChar, char, crlf,
                                          endOfLine, newline, spaces, string)
 import           Text.Parsec.Error      (errorMessages, messageString)
-import qualified  HGrammar.HGrammar as H
+import qualified HGrammar.HGrammar as H
+import qualified Parser.Parser as P 
+import qualified PParser.PParser as PP
 import AST.AST
 ------------------------------
 -- Types
@@ -174,8 +176,10 @@ parseSpecial :: StateParser SessionState
 parseSpecial = char '.' >> foldl1 (<|>)
     [ try parseFailure >> getState 
     , try parseReset   >> getState 
-    , try parseQuit 
-    , try parseParse >> getState 
+    , try parseQuit  
+    , try parseParse2 >> getState
+    , try parseParse3 >> getState  
+    , try parseParse  >> getState
     , char 'l' >> (parseLex <|> parseLoad ) >> getState 
     ] <?> "ERROR: bad command"
 
@@ -258,7 +262,36 @@ parseParse = do
             putErr mappedTriples
             (liftIO . putStrLn . showREPLError) mappedTriples
         Right  s -> liftIO $ putStrLn $ showAST s
+
+
+-- | A parser for the @.parse@ command is just a parser for the string "ast", followed
+-- by the execution of the parse command.
+parseParse3 :: ParsecT String SessionState IO ()
+parseParse3 = do
+    string "ast3"
+    spaces
+    f <- fromMaybe "." . actualFile <$> getState 
+    es <- PP.parse f
+    case es of
+        Left (err,pos) -> do 
+            f <- fromMaybe "." . actualFile <$> getState 
+            setPosition pos
+            let mappedTriples =  (\ (errMsg) -> (f,pos ,errMsg)) err
+            putErr mappedTriples
+            (liftIO . putStrLn . showREPLError) mappedTriples
+
+        Right s  -> liftIO $ prettyPrintS  s
+    
         
+
+
+parseParse2 :: ParsecT String SessionState IO ()
+parseParse2 = do
+    string "ast2"
+    spaces
+    pos'' <- getPosition 
+    args  <- parseArg
+    liftIO $ putStrLn $ P.printASR_parserAMStart args
 
 -- | A parser for the arguments of a @.load@ or @.lex@ is just parsing till
 -- we reach either an end of line or an end of file.

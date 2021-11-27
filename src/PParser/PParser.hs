@@ -10,6 +10,8 @@ import Data.Functor.Identity
 import AST.AST
 import qualified Control.Applicative as A (optional)
 import Prelude hiding (GT,LT,GE,LE, EQ)
+import Text.Parsec.Error ( errorMessages, messageString )
+import           Control.Monad.IO.Class (MonadIO (liftIO))
 
 
 type SP m a = ParsecT [Token] m Identity a
@@ -33,6 +35,27 @@ isBool = tokenPrim show g f
     where
         f TkTrue  = Just $ C $ BConstant True
         f TkFalse = Just $ C $ BConstant False 
+        f _           = Nothing
+        g pos _  _    = incSourceColumn pos 1 
+
+isIntT :: Monad m => ParsecT [Token] u m LipsT  
+isIntT = tokenPrim show g f
+    where
+        f TkInt   = Just LInt 
+        f _           = Nothing
+        g pos _  _    = incSourceColumn pos 1 
+
+isBoolT :: Monad m => ParsecT [Token] u m LipsT  
+isBoolT = tokenPrim show g f
+    where
+        f TkBool      = Just LBool 
+        f _           = Nothing
+        g pos _  _    = incSourceColumn pos 1 
+
+isLazyT :: Monad m => ParsecT [Token] u m (LipsT -> LipsT)
+isLazyT = tokenPrim show g f
+    where
+        f TkLazy      = Just LLazy
         f _           = Nothing
         g pos _  _    = incSourceColumn pos 1 
 
@@ -121,7 +144,7 @@ nonAssocCheck e                  = pure e
 
 
 pAST :: SP m S
-pAST = E <$> pExpr <* eof
+pAST = (E <$> pExpr) <|> (A <$> (pAssignment <|> pDeclaration)) <* eof
 
 pExpr :: SP m Expr
 pExpr = pP0 >>= nonAssocCheck 
@@ -177,7 +200,7 @@ pP7 :: SP m Expr
 pP7 =  pParenE <|> pQuoteE <|> isNum <|> isBool <|> isIdOrFapp 
     where
         pParenE = between pOP    (pCP    <?> "Non closing parenthesis Found") pExpr       
-        pQuoteE = between pQuote (pQuote <?> "Non closing Quote found Found") pExpr 
+        pQuoteE = between pQuote (pQuote <?> "Non closing Quote found Found") ( Lazy <$> pExpr)
         
 
 parse' :: String -> String
@@ -203,18 +226,46 @@ eval e ((TkOr,t):ts)    = Or e  (eval t ts)
 eval e ((TkEQ, t):ts)   = eval (EQ e t) ts
 eval e ts               = error "aun no definido."
 
-{-
-parse :: ParsecT String m Identity S 
-parse = do 
-    eTokens <- manyToken <$> many anyToken 
+
+pAction :: SP m Action 
+pAction = pDeclaration <|> pAssignment
+
+pDeclaration :: SP m Action 
+pDeclaration = f <$> pLType <*> pAssignment
+    where
+        f t (Assignment v e) = Declaration t v e
+        f _ _                = error "Impossible case"
+
+
+pLType :: SP m LipsT 
+pLType = isBoolT <|> isIntT <|> isLazyT <*> pLType
+
+pAssignment :: SP m Action
+pAssignment = f <$> isId <*> ((,) <$> pAssign <*> pExpr)
+    where
+        f :: Expr -> (Token, Expr) -> Action
+        f (Var v) (TkAssign, e ) = Assignment v e
+        f _ _              = error "Bad parse"
+
+
+parse ::  String -> ParsecT String u IO (Either (String,SourcePos) S) 
+parse sn = do 
+    eTokens <- manyToken <$> many anyToken
+    pos     <- getPosition 
     case eTokens of
-        Left errs -> undefined 
-        Right tks -> do
-            ast <- pAST
+        Left xs -> do 
+            let (err,col) = last xs
+            setPosition $ setSourceColumn pos col
+            fail err
+        --Left _       -> error "Imposible case" 
+        Right tks -> case runParserT pAST () sn tks of
+            Identity (Left parseError) -> do
+                let epos = errorPos parseError
+                let emsg = messageString $ last $ errorMessages parseError
+                liftIO $ putStrLn emsg
+                setPosition epos
+                return $ Left (emsg,epos)
+            Identity (Right ast)   -> return $ Right ast 
 
-            return  
 
-
-    return (E $ Var "4")
--}
 
