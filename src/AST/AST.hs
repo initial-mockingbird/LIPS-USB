@@ -29,11 +29,13 @@ data Expr
     | Var    String
     | FApp   String [Expr]
     | Lazy   Expr
+    | SeqE   Expr S        
 
 
 data Action
     = Declaration LipsT String Expr
     | Assignment  String Expr
+    | SeqA        Action S 
 
 data Constant n
     = BConstant Bool
@@ -61,6 +63,7 @@ actionToTree (Declaration t v e) = Node {rootLabel= ":=", subForest=[n',exprToTr
 actionToTree (Assignment v e) = Node {rootLabel= ":=", subForest=[n',exprToTree e]}
     where
         n' = Node {rootLabel= v, subForest=[]}
+actionToTree (SeqA a s) = Node {rootLabel= "Sequence", subForest=[actionToTree a,sToTree s]}
 
 exprToTree :: Expr -> Tree String
 exprToTree (Negate e)  = Node {rootLabel= "UMinus" , subForest=[exprToTree e]}
@@ -81,6 +84,7 @@ exprToTree (GE p q)    = Node {rootLabel= ">="    , subForest=[exprToTree p, exp
 exprToTree (Or p q)    = Node {rootLabel= "||"    , subForest=[exprToTree p, exprToTree q]}
 exprToTree (And p q)   = Node {rootLabel= "&&"    , subForest=[exprToTree p, exprToTree q]}
 exprToTree (Lazy e)    = Node {rootLabel= "LazyE", subForest=[exprToTree e]}
+exprToTree (SeqE e s)  = Node {rootLabel= "Sequence", subForest=[exprToTree e, sToTree s]}
 exprToTree (C c)       = case c of
         BConstant b   -> Node {rootLabel= show b  , subForest=[]}
         NumConstant n -> Node {rootLabel= show n  , subForest=[]}

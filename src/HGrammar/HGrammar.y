@@ -64,9 +64,14 @@ import Prelude hiding (EQ,LT,GT)
  
 
 S 
-    : Expr    ';'               { E   $1 }
-    | Action  ';'               { A   $1 }
-    
+    : Expr                      { E   $1 }
+    | Action                    { A   $1 }
+    | Expr    ';' S             { E (SeqE $1 $3)}
+    | Action  ';' S             { A (SeqA $1 $3)}
+    | Action  ';' {-empty-}     { A $1 }
+    | Expr    ';' {-empty-}     { E $1 }
+
+
 Action 
     : Declaration            {$1}
     | Assignment             {$1}
@@ -83,9 +88,9 @@ Assignment
     : TkId ':=' Expr {Assignment $1 $3}
 
 Expr
-    : '-' Expr %prec NEG       { Negate   $2 }
-    | '+' Expr %prec PLS       { Pos      $2 }
-    | '!' Expr                 { Not      $2 }
+    : '-' Expr %prec NEG        { Negate   $2 }
+    | '+' Expr %prec PLS        { Pos      $2 }
+    | '!' Expr                  { Not      $2 }
     | Expr '=' Expr             { EQ    $1 $3 }
     | Expr '<>' Expr            { NEQ   $1 $3 }
     | Expr '+' Expr             { Plus  $1 $3 }
@@ -104,6 +109,7 @@ Expr
     | FApp                      {       $1    }
     | Constant                  {       $1    }
 
+
 Constant
     : true                      { toBoolC True    }
     | false                     { toBoolC False   }
@@ -113,6 +119,7 @@ FApp
     : TkId '(' Args ')'         { FApp  $1 $3 }
 
 
+
 Args
     : {- empty -}               { [] }
     | NEArgs                    { reverse $1 }
@@ -120,7 +127,7 @@ Args
 NEArgs 
     : Expr                      { $1 : []  }
     | NEArgs  ',' Expr          { $3 : $1 }
-    | NEArgs  ','               { % Left ("Parse error on argument list. ", 0)}
+    | NEArgs  ',' {- empty -}   { % Left ("Parse error on argument list. ", 0)}
 
 
 
