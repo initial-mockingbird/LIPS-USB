@@ -144,7 +144,7 @@ nonAssocCheck e                  = pure e
 
 
 pAST :: SP m S
-pAST = (E <$> pExpr) <|> (A <$> (pAssignment <|> pDeclaration)) <* eof
+pAST = (E <$> pExpr <* (eof <?> "Parse error: Malformed Expression")) <|> (A <$> (pAssignment <|> pDeclaration))
 
 pExpr :: SP m Expr
 pExpr = pP0 >>= nonAssocCheck 
@@ -231,17 +231,17 @@ pAction :: SP m Action
 pAction = pDeclaration <|> pAssignment
 
 pDeclaration :: SP m Action 
-pDeclaration = f <$> pLType <*> pAssignment
+pDeclaration = (f <$> pLType <*> pAssignment) <?> "Bad Declaration, format should follow: Lazy <Type> var := expr"
     where
         f t (Assignment v e) = Declaration t v e
         f _ _                = error "Impossible case"
 
 
 pLType :: SP m LipsT 
-pLType = isBoolT <|> isIntT <|> isLazyT <*> pLType
+pLType = (isBoolT <|> isIntT <|> isLazyT <*> pLType) <?> "Bad type initializator."
 
 pAssignment :: SP m Action
-pAssignment = f <$> isId <*> ((,) <$> pAssign <*> pExpr)
+pAssignment = f <$> isId <*> ((,) <$> pAssign <*> pExpr <* (eof <?> "Parse error: possible unmatched parenthesis/quotation" ))
     where
         f :: Expr -> (Token, Expr) -> Action
         f (Var v) (TkAssign, e ) = Assignment v e

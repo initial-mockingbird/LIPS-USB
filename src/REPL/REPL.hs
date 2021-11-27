@@ -211,7 +211,7 @@ parseReset = do
 -- "q". It halts the execution of the REPL.
 parseQuit :: StateParser a
 parseQuit = do
-    string "q"
+    try (string "q") <|> string "quit"
     spaces
     notFollowedBy anyChar <?> "ERROR: unexpected argument provided to quit"
     liftIO exitSuccess 
