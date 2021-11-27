@@ -150,23 +150,23 @@ pExpr :: SP m Expr
 pExpr = pP0 >>= nonAssocCheck 
 
 pP0 :: SP m Expr
-pP0 = eval <$> pP1 <*> many ((,) <$> p0Ops <*> pP1)
+pP0 = toETree <$> pP1 <*> many ((,) <$> p0Ops <*> pP1)
     where
         p0Ops = pAnd
 
 pP1 :: SP m Expr
-pP1 = eval <$> pP2 <*> many ((,) <$> p1Ops <*> pP2)
+pP1 = toETree <$> pP2 <*> many ((,) <$> p1Ops <*> pP2)
     where
         p1Ops = pOr
 
 pP2 :: SP m Expr
-pP2 = eval <$> pP3 <*> many ((,) <$> p2Ops <*> pP3)
+pP2 = toETree <$> pP3 <*> many ((,) <$> p2Ops <*> pP3)
     where
         p2Ops = pEQ <|> 
                 pNE
 
 pP3 :: SP m Expr
-pP3 = eval <$> pP4 <*> many ((,) <$> p3Ops <*> pP4)
+pP3 = toETree <$> pP4 <*> many ((,) <$> p3Ops <*> pP4)
     where
         p3Ops = pGT <|> 
                 pLT <|>
@@ -174,18 +174,18 @@ pP3 = eval <$> pP4 <*> many ((,) <$> p3Ops <*> pP4)
                 pLE 
 
 pP4 :: SP m Expr
-pP4 = eval <$> pP5 <*> many ((,) <$> p4Ops <*> pP5)
+pP4 = toETree <$> pP5 <*> many ((,) <$> p4Ops <*> pP5)
     where
         p4Ops = pS <|> pM
 
 
 pP5 :: SP m Expr
-pP5 = eval <$> pP6 <*> many ((,) <$> p5Ops <*> pP6)
+pP5 = toETree <$> pP6 <*> many ((,) <$> p5Ops <*> pP6)
     where
         p5Ops = pMult <|> pMod
 
 pP6 :: SP m Expr
-pP6 = f <$> A.optional uOP <*> (eval <$> pP7 <*> many ((,) <$> p6Ops <*> pP7))
+pP6 = f <$> A.optional uOP <*> (toETree <$> pP7 <*> many ((,) <$> p6Ops <*> pP7))
     where
         p6Ops = pPower 
         uOP = pNot <|> pM <|> pS
@@ -210,21 +210,21 @@ parse' s = case manyToken s of
         Identity  (Left e)    -> show e
         Identity (Right expr) -> toPrettyS expr 
 
-eval :: Expr -> [(Token, Expr)] -> Expr
-eval e []               = e
-eval e ((TkPlus,t):ts)  = eval (Plus e t) ts
-eval e ((TkMinus,t):ts) = eval (Minus e t) ts
-eval e ((TkMult,t):ts)  = eval (Times e t) ts
-eval e ((TkPower,t):ts) = Pow e (eval t ts )
-eval e ((TkLT,t):ts)    = eval (LT e t) ts
-eval e ((TkGT,t):ts)    = eval (GT e t) ts
-eval e ((TkLE,t):ts)    = eval (LE e t) ts 
-eval e ((TkGE,t):ts)    = eval (GE e t) ts
-eval e ((TkNE,t):ts)    = eval (NEQ e t) ts
-eval e ((TkAnd,t):ts)   = And e (eval t ts)
-eval e ((TkOr,t):ts)    = Or e  (eval t ts)
-eval e ((TkEQ, t):ts)   = eval (EQ e t) ts
-eval e ts               = error "aun no definido."
+toETree :: Expr -> [(Token, Expr)] -> Expr
+toETree e []               = e
+toETree e ((TkPlus,t):ts)  = toETree (Plus e t) ts
+toETree e ((TkMinus,t):ts) = toETree (Minus e t) ts
+toETree e ((TkMult,t):ts)  = toETree (Times e t) ts
+toETree e ((TkPower,t):ts) = Pow e (toETree t ts )
+toETree e ((TkLT,t):ts)    = toETree (LT e t) ts
+toETree e ((TkGT,t):ts)    = toETree (GT e t) ts
+toETree e ((TkLE,t):ts)    = toETree (LE e t) ts 
+toETree e ((TkGE,t):ts)    = toETree (GE e t) ts
+toETree e ((TkNE,t):ts)    = toETree (NEQ e t) ts
+toETree e ((TkAnd,t):ts)   = And e (toETree t ts)
+toETree e ((TkOr,t):ts)    = Or e  (toETree t ts)
+toETree e ((TkEQ, t):ts)   = toETree (EQ e t) ts
+toETree e ts               = error "aun no definido."
 
 
 pAction :: SP m Action 
