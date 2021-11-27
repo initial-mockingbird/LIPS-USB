@@ -144,7 +144,7 @@ nonAssocCheck e                  = pure e
 
 
 pAST :: SP m S
-pAST = (E <$> pExpr <* (eof <?> "Parse error: Malformed Expression")) <|> (A <$> (pAssignment <|> pDeclaration))
+pAST = (E <$> pExpr <* (eof <?> "Parse error: Malformed Expression")) <|> (A <$> pAction)
 
 pExpr :: SP m Expr
 pExpr = pP0 >>= nonAssocCheck 
@@ -241,7 +241,7 @@ pLType :: SP m LipsT
 pLType = (isBoolT <|> isIntT <|> isLazyT <*> pLType) <?> "Bad type initializator."
 
 pAssignment :: SP m Action
-pAssignment = f <$> isId <*> ((,) <$> pAssign <*> pExpr <* (eof <?> "Parse error: possible unmatched parenthesis/quotation" ))
+pAssignment = f <$> isId <*> ((,) <$> (pAssign <?> "Bad assing symbol") <*> pExpr <* (eof <?> "Parse error: possible unmatched parenthesis/quotation" ))
     where
         f :: Expr -> (Token, Expr) -> Action
         f (Var v) (TkAssign, e ) = Assignment v e
