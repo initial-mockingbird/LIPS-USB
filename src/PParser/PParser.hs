@@ -301,7 +301,7 @@ pLType = (isBoolT <|> isIntT <|> isLazyT <*> pLType) <?> "Bad type initializator
 
 -- | Parses an assignment
 pAssignment :: SP m Action
-pAssignment = f <$> isId <*> ((,) <$> (pAssign <?> "Bad assing symbol") <*> pExpr <* (eof <?> "Parse error: possible unmatched parenthesis/quotation" ))
+pAssignment = f <$> (isId <?> "Parse error: Can only assign identifiers") <*> ((,) <$> (pAssign <?> "Bad assing symbol") <*> pExpr <* (eof <?> "Parse error: possible unmatched parenthesis/quotation" ))
     where
         f :: Expr -> (Token, Expr) -> Action
         f (Var v) (TkAssign, e ) = Assignment v e
