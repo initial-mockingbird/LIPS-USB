@@ -55,6 +55,15 @@
 
 ## Gramática para la Implementación
 
+	%right '||' 
+	%right '&&' 
+	%nonassoc '=' '<>'
+	%nonassoc '>' '<' '>=' '<='
+	%left '+' '-'
+	%left '*' '%'
+	%nonassoc NEG PLS '!'
+	%right '^'
+
 	<entrada> -> <S>
 	
 	<S> 
