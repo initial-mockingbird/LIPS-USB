@@ -85,7 +85,7 @@ Nota: La gramatica esta presentada en: [Extended Backus-Naur Form](https://en.wi
     <p3>  -> <p4> (<p3Ops> <p4>)*
     <p4>  -> <p5> (<p4Ops> <p5>)*
     <p5>  -> <p6> (<p5Ops> <p6>)*
-    <p6>  -> <optUnary> <p7> (<p6Ops> <p7>)*
+    <p6>  -> <optUnary>* <p7> (<p6Ops> <p7>)*
     <p7>  -> '(' <exp> ')' | ''' <exp> ''' | integer | boolean | <idOrFapp>
 
     <p2Ops> -> '=' | '<>'

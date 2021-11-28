@@ -222,16 +222,19 @@ pP5 = toETree <$> pP6 <*> many ((,) <$> p5Ops <*> pP6)
 
 -- | Parses a precedence 6 expression
 pP6 :: SP m Expr
-pP6 = f <$> A.optional uOP <*> (toETree <$> pP7 <*> many ((,) <$> p6Ops <*> pP7))
+pP6 = g <$> A.optional (many uOP) <*> (toETree <$> pP7 <*> many ((,) <$> p6Ops <*> pP7))
     where
         p6Ops = pPower
         uOP = pNot <|> pM <|> pS
-        f Nothing x       = x
-        f (Just tk ) x =  case tk of
-            TkNot   -> Not x
-            TkPlus  -> Pos x
-            TkMinus -> Negate x
+
+        
+        g Nothing x       = x
+        g (Just (tk:tks)) x =  case tk of
+            TkNot   -> Not $ g (Just tks)    x 
+            TkPlus  -> Pos $ g (Just tks)    x
+            TkMinus -> Negate $ g (Just tks) x
             _       -> error "Imposible case"
+        g (Just []) x = x
 
 -- | Parses a precedence 7 expression
 pP7 :: SP m Expr
