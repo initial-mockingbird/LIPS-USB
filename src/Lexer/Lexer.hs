@@ -52,8 +52,9 @@ data Token
     | TkBool         -- ^ @ bool @
     | TkType         -- ^ @ type @
     | TkLazy         -- ^ @ lazy @
-    deriving Eq
+    deriving (Eq,Show)
 
+{-
 instance Show Token where
     show (TkId var)     = var    
     show (TkNum n)      = show n
@@ -95,6 +96,7 @@ instance Show Token where
     show TkBool         = "bool"
     show TkType         = "type"
     show TkLazy         = "lazy"
+-}
 
 -- | Auxiliary type, will provide a "logged" version of Either
 newtype LEither a = L (Either [(String,Int)] a)
@@ -204,10 +206,23 @@ tokenizer (x,col)
     | (x `elem` reservedWord)
         && isId x           = Right $ tkReservedWord !! head (findPos reservedWord x)
     -- It's a number
-    | all isDigit x         = Right $ TkNum $ read x
+    | all isDigit x         = if checkOverflow x 
+        then Right $ TkNum $ read x 
+        else Left ("ERROR: lexer(" ++ show x ++ ") ==> Integer overflow/underflow",col)
     -- It's variable identifier
     | isId x                = Right $ TkId x
     | otherwise             = Left ("ERROR: lexer(" ++ show x ++ ") ==> Inicializador de identificador invalido",col)
+
+-- | Checks for over/underflow.
+checkOverflow :: String -> Bool
+checkOverflow xs = case xs of
+    '-':_ -> (lxs <= lminb) && (signum ( read xs :: Int ) == -1)
+    _     -> (lxs <= lmaxb) && (signum ( read xs :: Int ) == 1)
+    where
+        lminb = length $ show (minBound :: Int)
+        lmaxb = length $ show (maxBound :: Int)
+        lxs   = length xs
+
 
 -- | Convert a String to ( Token or Error )
 manyToken 

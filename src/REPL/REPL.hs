@@ -95,7 +95,14 @@ putStrLns = traverse_ putStrLn
 
 -- | A way to show REPL errors.
 showREPLError :: REPLError -> String 
-showREPLError (fp,sp,err) = "<" ++ fp ++ "," ++ show sp ++ "," ++ err ++ ">"
+showREPLError (fp,sp,err) =  '(' : fp ++ "," ++ posMessage ++ "," ++ err ++ ")"
+    where 
+        posMessage = "line: " ++ show (sourceLine sp)
+
+-- | Show all the REPL errors.
+showREPLErrors :: [REPLError] -> String
+showREPLErrors  xs = '[' : '\n' :  foldr (\err acc -> '\t' : showREPLError err ++ ",\n" ++ acc) "]" xs
+
 
 -- | A way to add an error to our inner state.
 putErr :: REPLError -> StateParser ()
@@ -182,7 +189,7 @@ parseSpecial = char '.' >> foldl1 (<|>)
     , try parseParse  >> getState
     , char 'l' >> (parseLex <|> parseLoad ) >> getState 
     ] <?> "ERROR: bad command"
-
+ 
 
 
 
@@ -193,8 +200,8 @@ parseFailure = do
     string "failed"
     spaces
     notFollowedBy anyChar <?> "ERROR: unexpected argument provided to failed"
-    err <- errors <$> getState
-    liftIO $ putStrLns $ showREPLError <$> err
+    err <- reverse . errors <$> getState
+    liftIO $ putStrLn $ showREPLErrors err
 
 -- | A parser for the @.reset@ command is just a parser for "reset". Flushes
 -- the errors unless its executed inside a file (it's generally not desirable to flush the error
@@ -211,7 +218,7 @@ parseReset = do
 -- "q". It halts the execution of the REPL.
 parseQuit :: StateParser a
 parseQuit = do
-    try (string "quit") <|> string "q"
+    "" <$ eof <|> try (string "quit") <|> string "q"
     spaces
     notFollowedBy anyChar <?> "ERROR: unexpected argument provided to quit"
     liftIO exitSuccess 
