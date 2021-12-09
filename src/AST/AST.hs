@@ -60,7 +60,7 @@ data Constant n
 
 
 -- | Lips types
-data LipsT = LInt | LBool | LLazy LipsT
+data LipsT = LInt | LBool | LLazy LipsT deriving (Eq)
 
 -- | Helper type to pretty print things
 newtype TS = T (Tree String)

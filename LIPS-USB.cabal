@@ -33,6 +33,7 @@ library
       Parser.Tokens
       PParser.PParser
       REPL.REPL
+      STable.STable
   other-modules:
       Paths_LIPS_USB
   hs-source-dirs:
