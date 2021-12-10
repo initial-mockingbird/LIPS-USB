@@ -29,6 +29,15 @@ data IdState = IdState
     }
 
 
+lookupType' :: (String -> String) -> Identifier -> STable -> Either String LipsT
+lookupType' ef var STable{getTable=table} = case Map.lookup var table of
+    Nothing -> Left $ ef var
+    Just t  -> Right $ lType t 
+
+
+lookupType :: Identifier -> STable -> Either String LipsT
+lookupType = lookupType' (\vName -> "Variable: '" ++ vName ++ "' has not been declared, assignment error!.")
+
 -- | Updates a given identifier or yields an error if any error happens
 updateIdentifier :: Identifier -> Expr ->  STable -> Either String STable
 updateIdentifier vName expr STable{getTable=table} = case Map.lookup vName table of
