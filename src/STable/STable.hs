@@ -9,7 +9,7 @@ Portability : POSIX
 -}
 import AST.AST
 import           Prelude          hiding (EQ, GT, LT)
-import Data.Map (Map)
+import Data.Map (Map, (!))
 import qualified Data.Map as Map
 import Control.Monad.State.Strict
 
@@ -36,38 +36,23 @@ lookupType' ef var STable{getTable=table} = case Map.lookup var table of
 
 
 lookupType :: Identifier -> STable -> Either String LipsT
-lookupType = lookupType' (\vName -> "Variable: '" ++ vName ++ "' has not been declared, assignment error!.")
+lookupType = lookupType' (\vName -> "La variable: '" ++ vName ++ "' no ha sido declarada, error de asignacion!.")
 
 -- | Updates a given identifier or yields an error if any error happens
-updateIdentifier :: Identifier -> Expr ->  STable -> Either String STable
-updateIdentifier vName expr STable{getTable=table} = case Map.lookup vName table of
-    Nothing      -> Left $ "Variable: '" ++ vName ++ "' has not been declared, assignment error!."
-    Just idState -> do 
-        exprT <- type' expr 
-        if exprT == lType idState
-        then Right . STable $ push table IdState 
-            { lType  = lType idState
-            , lValue = lValue idState
-            , cValue = expr
-            , rValue = (`eval'` expr)
-            }
-        else Left $ "Variable: '" ++ vName ++ "' and the expression: '" ++ show expr ++ "' has different types." ++
-            "\n" ++ vName ++ " type: " ++ show  (lType idState) ++ 
-            "\n" ++ show expr ++ " type: " ++ show (type' expr)
+updateIdentifier :: Identifier -> Expr ->  STable -> STable
+updateIdentifier vName expr STable{getTable=table} = STable $ push table IdState 
+        { lType  = lType idState
+        , lValue = lValue idState
+        , cValue = expr
+        , rValue = (`eval'` expr)
+        }
     where
-        push   = flip (Map.insert vName)
+        push    = flip (Map.insert vName)
+        idState = table ! vName
 
 -- | Sets a given identifier or yields an error if any error happens
-setIdentifier :: Identifier -> Expr -> LipsT -> STable -> Either String STable
-setIdentifier vName expr vType STable{getTable=table} = case Map.lookup vName table of
-    Just _  -> Left $ "Variable: '" ++ vName ++ "' is already declared! error."
-    Nothing -> do
-        exprT <- type' expr 
-        if exprT == vType 
-        then Right . STable $ Map.insert vName newId table
-        else Left $ "Variable: '" ++ vName ++ "' and the expression: '" ++ show expr ++ "' has different types." ++
-            "\n" ++ vName ++ " type: " ++ show  vType ++ 
-            "\n" ++ show expr ++ " type: " ++ show (type' expr)
+setIdentifier :: Identifier -> Expr -> LipsT -> STable -> STable
+setIdentifier vName expr vType STable{getTable=table} = STable $ Map.insert vName newId table
     where
         newId = IdState 
             { lType  = vType
@@ -75,6 +60,10 @@ setIdentifier vName expr vType STable{getTable=table} = case Map.lookup vName ta
             , cValue = expr
             , rValue = (`eval'` expr)
             }
+
+
+
+
 
 -- | Dummy type
 type' :: Expr -> Either String LipsT
@@ -86,8 +75,8 @@ eval' = undefined
 
 -- | Given an action, updates the state of the symbol table or yields an error.
 updateActionTree :: Action -> StateT STable (Either String) ()
-updateActionTree (Assignment vName nExpr)       = get >>= lift . updateIdentifier vName nExpr   >>= put 
-updateActionTree (Declaration vType vName expr) = get >>= lift . setIdentifier vName expr vType >>= put
+updateActionTree (Assignment vName nExpr)       = get >>= lift . (return . updateIdentifier vName nExpr)   >>= put 
+updateActionTree (Declaration vType vName expr) = get >>= lift . (return . setIdentifier vName expr vType) >>= put
 updateActionTree (SeqA a (A b)) = updateActionTree a >> updateActionTree b
 updateActionTree (SeqA a (E b)) = updateActionTree a >> updateExprTree   b
 
