@@ -21,7 +21,7 @@ import           Prelude          hiding (EQ, GT, LT)
 ------------------------------
 
 -- | AST tree
-data S = A Action | E Expr deriving Eq
+data S = A Action | E Expr deriving (Eq,Ord)
 
 -- | Expression tree
 data Expr
@@ -46,23 +46,23 @@ data Expr
     | FApp   String [Expr]
     | Lazy   Expr
     | SeqE   Expr S
-    deriving Eq
+    deriving (Eq, Ord)
 
 -- | Action tree
 data Action
     = Declaration LipsT String Expr
     | Assignment  String Expr
     | SeqA        Action S
-    deriving Eq
+    deriving (Eq,Ord)
 
 -- | Constant definition
 data Constant n
     = BConstant Bool
     | NumConstant n
-    deriving Eq
+    deriving (Eq,Ord)
 
 -- | Lips types
-data LipsT = LInt | LBool | LLazy LipsT deriving Eq
+data LipsT = LInt | LBool | LLazy LipsT deriving (Eq,Ord)
 
 -- | Helper type to pretty print things
 newtype TS = T (Tree String)
