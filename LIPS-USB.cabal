@@ -34,6 +34,7 @@ library
       PParser.PParser
       REPL.REPL
       STable.STable
+      ValidT.ValidT
   other-modules:
       Paths_LIPS_USB
   hs-source-dirs:
