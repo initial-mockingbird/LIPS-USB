@@ -12,6 +12,7 @@ import           Prelude          hiding (EQ, GT, LT)
 import Data.Map (Map, (!))
 import qualified Data.Map as Map
 import Control.Monad.State.Strict
+import Control.Monad
 
 -- | An Identifier is just a String for now... (Can be changed into an expression or anything
 -- later without compromising the code).
@@ -61,17 +62,78 @@ setIdentifier vName expr vType STable{getTable=table} = STable $ Map.insert vNam
             , rValue = (`eval'` expr)
             }
 
-
-
-
-
--- | Dummy type
-type' :: Expr -> Either String LipsT
-type' = undefined 
-
 -- | Dummy eval
 eval' :: STable -> Expr -> Expr
-eval' = undefined 
+eval' st expr = fromJust $  eA <+> eB <+> eL <+> eF 
+    where
+        (<+>) = mplus  
+        eA = fmap (C . NumConstant) . evalArithm st $ expr 
+        eB = fmap (C . BConstant) . evalBool st $ expr
+        eL = evalLazy st expr
+        eF = evalFApp st expr
+
+        fromJust (Just a) = a
+
+evalArithm :: STable -> Expr -> Maybe Int
+evalArithm _ (C (NumConstant  n)) = Just n
+evalArithm st@STable{getTable=t} (Var vName) = evalArithm st (rValue  (t ! vName) st )
+evalArithm st (Negate e)  = (* (-1)) <$> evalArithm st e
+evalArithm st (Pos e)     = evalArithm st e
+evalArithm st (Plus a b)  = (+) <$> evalArithm st a <*> evalArithm st b
+evalArithm st (Minus a b) = (-) <$> evalArithm st a <*> evalArithm st b
+evalArithm st (Mod a b)   = mod <$> evalArithm st a <*> evalArithm st b
+evalArithm st (Times a b) = (*) <$> evalArithm st a <*> evalArithm st b
+evalArithm st (Pow a b)   = (^) <$> evalArithm st a <*> evalArithm st b
+evalArithm _ _ = Nothing 
+
+
+evalBool :: STable -> Expr -> Maybe Bool
+evalBool _ (C (BConstant  b)) = Just b
+evalBool st@STable{getTable=t} (Var vName) = evalBool st (rValue  (t ! vName) st )
+evalBool st (Not e)    = not <$> evalBool st e
+evalBool st (Or b b')  = (||) <$> evalBool st b <*> evalBool st b'
+evalBool st (And b b') = (&&) <$> evalBool st b <*> evalBool st b'
+evalBool st (EQ a b)   = return $ eval' st a == eval' st b
+evalBool st (NEQ a b)  = return $ eval' st a /= eval' st b
+evalBool st (LT a b)   = (<)  <$> evalArithm st (eval' st a) <*> evalArithm st (eval' st b)
+evalBool st (GT a b)   = (>)  <$> evalArithm st (eval' st a) <*> evalArithm st (eval' st b)
+evalBool st (LE a b)   = (<=) <$> evalArithm st (eval' st a) <*> evalArithm st (eval' st b)
+evalBool st (GE a b)   = (>=) <$> evalArithm st (eval' st a) <*> evalArithm st (eval' st b)
+evalBool _ _ = Nothing 
+
+evalLazy :: STable -> Expr -> Maybe Expr
+evalLazy st (Lazy e) = Just $ eval' st e
+evalLazy _    _      = Nothing 
+
+
+validateExp :: Expr -> STable -> Either String LipsT
+validateExp node tabla = undefined 
+
+evalFApp :: STable -> Expr -> Maybe Expr
+evalFApp st@STable{getTable=t} (FApp fName args) = return $ f STable{getTable=t'} 
+    where
+
+        f = rValue $ t ! fName
+
+        serializeArg (name, arg) = IdState 
+            { lType  = fromRight $ validateExp arg st
+            , lValue = Var name
+            , cValue = arg
+            , rValue = (`eval'` arg)
+            }
+        
+        serializeName n = fName ++ "@" ++ show n
+        serializeNames  = [serializeName n | n <- [1..(length args)]]
+        serializeArgs = serializeArg <$> zip serializeNames args
+        t'           = foldr (uncurry Map.insert) t (serializeNames `zip` serializeArgs )
+        
+        fromRight (Right a) = a
+evalFApp _ _                  = Nothing 
+
+
+
+
+
 
 -- | Given an action, updates the state of the symbol table or yields an error.
 updateActionTree :: Action -> StateT STable (Either String) ()

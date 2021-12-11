@@ -31,7 +31,6 @@ dependencies:
 - tasty-hunit
 - tasty-hspec
 - array
-
 library:
   source-dirs: src
 
