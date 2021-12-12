@@ -21,6 +21,8 @@ description:         Please see the README on GitHub at <https://github.com/gith
 
 dependencies:
 - base >= 4.7 && < 5
+- random
+- mwc-random
 - parsec
 - mtl
 - containers
@@ -30,6 +32,7 @@ dependencies:
 - tasty
 - tasty-hunit
 - tasty-hspec
+- time
 - array
 library:
   source-dirs: src
