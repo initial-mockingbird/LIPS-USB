@@ -70,17 +70,14 @@ validateExp node tabla
     -- Unary expressions
     | exprIsUnary node = do
         tipo <- validateExp (exprUnaryTake node) tabla
-        if tipo == getTypeUnaryExpr node then
-            return tipo
-        else
-            Left ("No se pue||de aplicar este simbolo unario "++show(node)++" a expresion de tipo "++show(tipo))
+        return (getTypeUnaryExpr node)
     -- Binary expression 
     | exprIsBinary node = do
         let (ex1,ex2) = takeFromBinaryExpr node 
         tipo1 <- validateExp ex1 tabla
         tipo2 <- validateExp ex2 tabla
-        if tipo1 == tipo2 && tipo1== getTypeBinaryExpr node then
-            return tipo1
+        if tipo1 == tipo2 then
+            return (getTypeBinaryExpr node)
         else if tipo1 /= tipo2 then 
             Left ("Tipos no coinciden " ++ show(ex1) ++" es de tipo = "++show(tipo1) ++ " mientras que "++show(ex2) ++" es de tipo "++show(tipo2))
         else
@@ -100,7 +97,7 @@ var =  C ( NumConstant 2 )
 myVar =  C ( BConstant True ) 
 tablaVacia = Map.empty
 mainValidate = do
-    myAST <- parse "lazy int var := '1 + 2'"
+    myAST <- parse "3 || 1 + 2"
     let miTabla = setIdentifier "var" var LInt (STable tablaVacia)
     let miTabla2 = setIdentifier "myVar" myVar LBool miTabla
     return $ validate myAST miTabla2
