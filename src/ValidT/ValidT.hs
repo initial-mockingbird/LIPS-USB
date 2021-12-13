@@ -253,7 +253,11 @@ evalArithm  _           = lift Nothing
 
 evalBool :: Expr -> StateT STable Maybe Bool
 evalBool  (C (BConstant  b)) = return b
-evalBool  (Not e)   = not <$> evalBool e
+evalBool  (Not e)   = not <$> (evalBool e  `mplus` special e)
+    where
+        special :: Expr -> StateT STable Maybe Bool
+        special e = (/=) <$> evalArithm e <*> return 0
+
 evalBool (Or b b')  = (||) <$> evalBool b <*> evalBool b'
 evalBool (And b b') = (&&) <$> evalBool b <*> evalBool b'
 evalBool (EQ a b)   = hoist generalize $ (==) <$> eval' a <*>  eval' b
