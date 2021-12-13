@@ -11,14 +11,13 @@ module ValidT.ValidT where
 import AST.AST
 import Data.Maybe
 import Data.Either
-import Parser.Tokens
-import Lexer.Lexer
 import HGrammar.HGrammar
 import Data.Map (Map, (!))
 import qualified Data.Map as Map
 import Control.Monad.State.Strict
-import Control.Monad
 import           Prelude          hiding (EQ, GT, LT)
+import Control.Monad.Morph
+import Data.Functor.Identity ( Identity(Identity) ) 
 
 validate :: S -> STable -> Either String LipsT
 validate node tabla 
@@ -71,7 +70,7 @@ validateExp node tabla
     -- Unary expressions
     | exprIsUnary node = do
         tipo <- validateExp (exprUnaryTake node) tabla
-        if tipo == (getTypeUnaryExpr node) then
+        if tipo == getTypeUnaryExpr node then
             return tipo
         else
             Left ("No se pue||de aplicar este simbolo unario "++show(node)++" a expresion de tipo "++show(tipo))
@@ -80,7 +79,7 @@ validateExp node tabla
         let (ex1,ex2) = takeFromBinaryExpr node 
         tipo1 <- validateExp ex1 tabla
         tipo2 <- validateExp ex2 tabla
-        if tipo1 == tipo2 && tipo1==(getTypeBinaryExpr node) then
+        if tipo1 == tipo2 && tipo1== getTypeBinaryExpr node then
             return tipo1
         else if tipo1 /= tipo2 then 
             Left ("Tipos no coinciden " ++ show(ex1) ++" es de tipo = "++show(tipo1) ++ " mientras que "++show(ex2) ++" es de tipo "++show(tipo2))
@@ -97,8 +96,8 @@ getFunc "gcd" = Right (LInt,[LInt,LInt])
 getFunc "now" = Right (LInt,[])
 getFunc name = Left ("No existe la funcion "++name)
 
-var = ( C ( NumConstant 2 ) )
-myVar = ( C ( BConstant True ) )
+var =  C ( NumConstant 2 ) 
+myVar =  C ( BConstant True ) 
 tablaVacia = Map.empty
 mainValidate = do
     myAST <- parse "lazy int var := '1 + 2'"
@@ -127,11 +126,53 @@ newtype STable = STable { getTable :: Map Identifier IdState }
 
 -- | The state of a variable holds all the information concerning that variab;e
 data IdState = IdState  
-    { lType  :: LipsT             -- ^ The variable type
-    , lValue :: Expr              -- ^ The L-value of the variable
-    , cValue :: Expr              -- ^ The C-value of the variable
-    , rValue :: STable -> Expr    -- ^ A way to calculate the rValue of a variable.
+    { lType  :: LipsT                  -- ^ The variable type
+    , lValue :: Expr                   -- ^ The L-value of the variable
+    , cValue :: Expr                   -- ^ The C-value of the variable
+    , rValue :: State STable Expr  -- ^ A way to calculate the rValue of a variable.
     }
+
+-- | Aux function that modifies an entry in the Symbol table.
+addIdState :: Monad m => Identifier -> IdState -> (IdState -> IdState -> IdState) -> StateT STable m ()
+addIdState e eID f = modify $ STable . Map.insertWith f e eID . getTable
+
+-- | Tries to Update the Symbol Table 
+updateST :: Monad m => S -> StateT STable m ()
+updateST (A (Declaration t vName e)) = addIdState (Var vName) vState const 
+    where
+        vState = IdState t (Var vName) e (eval' e)
+updateST (A (Assignment vName expr)) = do 
+    t <- (! Var vName) . getTable <$> get
+    let newState = IdState { lType  = lType t
+        , lValue = lValue t
+        , cValue = expr
+        , rValue = eval' expr 
+        }
+    addIdState (Var vName) newState const 
+    
+updateST (A (SeqA a s)) = updateST (A a) >> updateST s
+updateST (E _) = return ()
+
+parse' s= case parse s of 
+        Left (s,_) -> Left s
+        Right a    -> Right a
+
+validate' :: S -> StateT STable (Either String) ()
+validate' s =  void <$> lift . validate s =<< get 
+    where
+        void f = () <$ f
+
+process :: String -> StateT STable (Either String) String
+process input = do
+    ast <-  lift $ parse' input
+    validate' ast
+    case ast of
+        (A action) -> do
+            updateST ast
+            lift . Right $ "ACK: " ++ show ast
+        (E expr) -> do
+            resExpr <- eval' expr
+            lift . Right $ "OK: " ++ show ast ++ "==>" ++ show resExpr
 
 
 lookupType' :: String -> Identifier -> STable -> Either String LipsT
@@ -155,17 +196,12 @@ getExpType st e = t
 getExpCValue :: STable -> Identifier  -> Maybe Expr
 getExpCValue STable{getTable=t } e = cValue <$> Map.lookup e t
 
--- | Updates a given identifier or yields an error if any error happens
-updateIdentifier' :: Identifier -> Expr ->  STable -> STable
-updateIdentifier' vName expr STable{getTable=table} = STable $ push table IdState 
-        { lType  = lType idState
-        , lValue = lValue idState
-        , cValue = expr
-        , rValue = (`eval'` expr)
-        }
+
+
+getRValue :: Identifier -> STable -> Expr
+getRValue v st@STable{getTable=t} = evalState prod st
     where
-        push    = flip (Map.insert vName)
-        idState = table ! vName
+        prod = rValue  (t ! v) 
 
 -- | Sets a given identifier or yields an error if any error happens
 setIdentifier' :: Identifier -> Expr -> LipsT -> STable -> STable
@@ -175,101 +211,112 @@ setIdentifier' vName expr vType STable{getTable=table} = STable $ Map.insert vNa
             { lType  = vType
             , lValue = vName 
             , cValue = expr
-            , rValue = (`eval'` expr)
+            , rValue = eval' expr
             }
-
-updateIdentifier :: String -> Expr ->  STable -> STable
-updateIdentifier vName =  updateIdentifier' (Var vName)
 
 setIdentifier :: String -> Expr -> LipsT -> STable -> STable
 setIdentifier vName = setIdentifier' (Var vName)
 
 -- | Dummy eval
-eval' :: STable -> Expr -> Expr
-eval' st expr = fromJust $ eL <+> eA <+> eB <+> eF 
+eval' :: Monad a => Expr -> StateT STable a Expr 
+eval' expr = hoist (generalize . fromJust) $ eL <+> eA <+> eB <+> eF 
     where
+        fromJust (Just a) = Identity a
         (<+>) = mplus  
-        eA = fmap (C . NumConstant) . evalArithm st $ expr 
-        eB = fmap (C . BConstant) . evalBool st $ expr
-        eL = evalLazy st expr
-        eF = evalFApp st expr
+        eA = mkIC <$> evalArithm expr 
+        eB = mkBC <$> evalBool expr
+        eL = evalLazy expr
+        eF = evalFApp expr
 
-        fromJust (Just a) = a
-
-evalArithm :: STable -> Expr -> Maybe Int
-evalArithm _ (C (NumConstant  n)) = Just n
-evalArithm st@STable{getTable=t} v@(Var vName) = evalArithm st (rValue  (t ! v) st )
-evalArithm st (Negate e)  = (* (-1)) <$> evalArithm st e
-evalArithm st (Pos e)     = evalArithm st e
-evalArithm st (Plus a b)  = (+) <$> evalArithm st a <*> evalArithm st b
-evalArithm st (Minus a b) = (-) <$> evalArithm st a <*> evalArithm st b
-evalArithm st (Mod a b)   = mod <$> evalArithm st a <*> evalArithm st b
-evalArithm st (Times a b) = (*) <$> evalArithm st a <*> evalArithm st b
-evalArithm st (Pow a b)   = (^) <$> evalArithm st a <*> evalArithm st b
-evalArithm _ _ = Nothing 
+eval :: S -> StateT STable Maybe S
+eval (E e) = hoist generalize  $ E <$> eval' e
+eval _     = lift Nothing 
 
 
-evalBool :: STable -> Expr -> Maybe Bool
-evalBool _ (C (BConstant  b)) = Just b
-evalBool st@STable{getTable=t} v@(Var vName) = evalBool st (rValue  (t ! v) st )
-evalBool st (Not e)    = not <$> evalBool st e
-evalBool st (Or b b')  = (||) <$> evalBool st b <*> evalBool st b'
-evalBool st (And b b') = (&&) <$> evalBool st b <*> evalBool st b'
-evalBool st (EQ a b)   = return $ eval' st a == eval' st b
-evalBool st (NEQ a b)  = return $ eval' st a /= eval' st b
-evalBool st (LT a b)   = (<)  <$> evalArithm st (eval' st a) <*> evalArithm st (eval' st b)
-evalBool st (GT a b)   = (>)  <$> evalArithm st (eval' st a) <*> evalArithm st (eval' st b)
-evalBool st (LE a b)   = (<=) <$> evalArithm st (eval' st a) <*> evalArithm st (eval' st b)
-evalBool st (GE a b)   = (>=) <$> evalArithm st (eval' st a) <*> evalArithm st (eval' st b)
-evalBool _ _ = Nothing 
+queryVal :: Expr -> StateT STable Maybe Expr 
+queryVal e = hoist generalize . rValue .  (! e) . getTable =<< get 
 
-evalLazy :: STable -> Expr -> Maybe Expr
-evalLazy st (Lazy e) = Just e
-evalLazy st@STable{getTable=t} v@(Var vName) = case tp of
-    LLazy _ -> return $ f st
-    _       -> Nothing 
-    where
-        istate = t ! v
-        tp     = lType istate
-        f      = rValue istate
-evalLazy _    _      = Nothing 
+evalArithm :: Expr -> StateT STable Maybe Int
+evalArithm (C (NumConstant  n)) = return n
+evalArithm  (Negate e)  = (* (-1)) <$> evalArithm e
+evalArithm  (Pos e)     = evalArithm  e
+evalArithm  (Plus a b)  = (+) <$> evalArithm a <*> evalArithm b
+evalArithm  (Minus a b) = (-) <$> evalArithm a <*> evalArithm b
+evalArithm  (Mod a b)   = mod <$> evalArithm a <*> evalArithm b
+evalArithm  (Times a b) = (*) <$> evalArithm a <*> evalArithm b
+evalArithm  (Pow a b)   = (^) <$> evalArithm a <*> evalArithm b
+evalArithm v@(Var _)    = do 
+    (C (NumConstant n)) <- queryVal v  
+    return  n
+evalArithm  _           = lift Nothing 
 
 
-evalFApp :: STable -> Expr -> Maybe Expr
-evalFApp st@STable{getTable=t} (FApp fName args) = return $ f STable{getTable=t'} 
-    where
+evalBool :: Expr -> StateT STable Maybe Bool
+evalBool  (C (BConstant  b)) = return b
+evalBool  (Not e)   = not <$> evalBool e
+evalBool (Or b b')  = (||) <$> evalBool b <*> evalBool b'
+evalBool (And b b') = (&&) <$> evalBool b <*> evalBool b'
+evalBool (EQ a b)   = hoist generalize $ (==) <$> eval' a <*>  eval' b
+evalBool (NEQ a b)  = hoist generalize $ (/=) <$> eval' a <*>  eval' b
+evalBool (LT a b)   = (<)  <$> evalArithm a <*> evalArithm b
+evalBool (GT a b)   = (>)  <$> evalArithm a <*> evalArithm b
+evalBool (LE a b)   = (<=) <$> evalArithm a <*> evalArithm b
+evalBool (GE a b)   = (>=) <$> evalArithm a <*> evalArithm b
+evalBool v@(Var _)  = do 
+    (C (BConstant n)) <- queryVal v  
+    return  n
+evalBool _ = lift Nothing 
 
-        f = rValue $ t ! Var fName
+evalLazy :: Expr -> StateT STable Maybe Expr
+evalLazy (Lazy e)      = return e
+evalLazy v@(Var vName) = do
+    isState <- (! v) . getTable <$> get
+    case lType isState of
+        LLazy _ -> getRValue v <$> get
+        _       -> lift Nothing 
+evalLazy   _      = lift Nothing 
+
+
+evalFApp :: Expr -> StateT STable Maybe Expr
+evalFApp (FApp fName args) = do
+    st@STable{getTable=t} <- get
+    let
+        f = getRValue (Var fName)
 
         serializeArg (name, arg) = IdState 
             { lType  = fromRight $ validateExp arg st
             , lValue = name
             , cValue = arg
-            , rValue = (`eval'` arg)
+            , rValue = eval' arg
             }
         
         serializeName n = fName ++ "@" ++ show n
         serializeNames  = Var <$> [serializeName n | n <- [1..(length args)]]
-        serializeArgs = serializeArg <$> zip serializeNames args
-        t'           = foldr (uncurry Map.insert) t (serializeNames `zip` serializeArgs )
-        
+        serializeArgs   = serializeArg <$> zip serializeNames args
+        t'              = foldr (uncurry Map.insert) t (serializeNames `zip` serializeArgs )
         fromRight (Right a) = a
-evalFApp _ _                  = Nothing 
+
+    return $ f STable{getTable=t'} 
+    
+evalFApp _                  = lift Nothing 
+
+
+
+getArgList :: String -> Int -> STable -> [Expr]
+getArgList fName nArgs st@STable{getTable=t} =  ($ st) . getRValue  <$> argsNames
+    where
+        argsNames = [ Var $ fName ++ "@" ++ show n | n <- [1..nArgs]]
+
 
 
 dummyPlus :: Int -> Int -> Int -> Int
 dummyPlus a b c = a + b + c
 
-getArgList :: String -> Int -> STable -> [Expr]
-getArgList fName nArgs st@STable{getTable=t} =  ($ st) . rValue . (t !) <$> argsNames
-    where
-        argsNames = [ Var $ fName ++ "@" ++ show n | n <- [1..nArgs]]
-         
-
 dummyPlus' :: STable -> Expr 
 dummyPlus' st = mkIC (dummyPlus arg1 arg2 arg3)
     where
-        Just [arg1,arg2,arg3] =  traverse (evalArithm st) $ getArgList "dummyPlus" 3 st
+        prod =  traverse evalArithm  $ getArgList "dummyPlus" 3 st
+        Just [arg1,arg2,arg3] = evalStateT prod st
 
 
 
@@ -305,21 +352,21 @@ initialST = STable{getTable=t}
         d1 = IdState { lType  = LInt 
             , lValue =  v1
             , cValue = mkIC 10
-            , rValue = (`eval'` mkIC 10)
+            , rValue = return $ mkIC 10
             }
         
         v2 = Var "angelito"
         d2 = IdState { lType  = LInt 
             , lValue = v2
             , cValue = mkIC (-15)
-            , rValue = (`eval'` mkIC (-15))
+            , rValue = return $ mkIC (-15)
             }
         
         v3 = Var "mari"
         d3 = IdState { lType  = LLazy LInt 
             , lValue = v3
-            , cValue = Lazy (Plus (mkIC 4) (v2))
-            , rValue = (`eval'` Lazy (Plus (mkIC 4) (v2)))
+            , cValue = Lazy (Plus (mkIC 4) v2 )
+            , rValue = eval' $ Lazy (Plus (mkIC 4) v2 )
             }
 
         v4 = Var "dummyPlus"
@@ -327,18 +374,18 @@ initialST = STable{getTable=t}
             { lType  = undefined 
             , lValue = v4
             , cValue = undefined 
-            , rValue = dummyPlus'
+            , rValue = dummyPlus' <$> get
             }
         
         t = Map.fromList [(v1,d1),(v2,d2),(v3,d3),(v4,d4)]
     
+test1,test2,test3,test4,test5,test6,test7 :: State STable Expr
+test1 = eval' exp1
+test2 = eval' exp2
+test3 = eval' exp3
+test4 = eval' exp4
+test5 = eval' exp5
+test6 = eval' exp6
+test7 = eval' exp7
 
-test1 = eval' initialST exp1
-test2 = eval' initialST exp2
-test3 = eval' initialST exp3
-test4 = eval' initialST exp4
-test5 = eval' initialST exp5
-test6 = eval' initialST exp6
-test7 = eval' initialST exp7
-
-tests = mapM print [test1,test2,test3,test4,test5,test6,test7]
+tests = mapM (print . flip evalStateT initialST) [test1,test2,test3,test4,test5,test6,test7]

@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       AST.AST
+      Func.Func
       HGrammar.HGrammar
       Lexer.Lexer
       Lib
@@ -44,13 +45,17 @@ library
     , base >=4.7 && <5
     , bytestring
     , containers
+    , mmorph
     , mtl
+    , mwc-random
     , parsec
     , pretty-tree
+    , random
     , tasty
     , tasty-hspec
     , tasty-hunit
     , text
+    , time
   default-language: Haskell2010
 
 executable LIPS-USB-exe
@@ -66,13 +71,17 @@ executable LIPS-USB-exe
     , base >=4.7 && <5
     , bytestring
     , containers
+    , mmorph
     , mtl
+    , mwc-random
     , parsec
     , pretty-tree
+    , random
     , tasty
     , tasty-hspec
     , tasty-hunit
     , text
+    , time
   default-language: Haskell2010
 
 test-suite LIPS-USB-test
@@ -90,11 +99,15 @@ test-suite LIPS-USB-test
     , base >=4.7 && <5
     , bytestring
     , containers
+    , mmorph
     , mtl
+    , mwc-random
     , parsec
     , pretty-tree
+    , random
     , tasty
     , tasty-hspec
     , tasty-hunit
     , text
+    , time
   default-language: Haskell2010

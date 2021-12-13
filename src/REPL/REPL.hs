@@ -44,6 +44,9 @@ import qualified HGrammar.HGrammar as H
 import qualified Parser.Parser as P 
 import qualified PParser.PParser as PP
 import AST.AST
+import ValidT.ValidT hiding (initialST)
+import Func.Func
+import Control.Monad.State.Strict hiding (void)
 ------------------------------
 -- Types
 ------------------------------
@@ -53,8 +56,8 @@ data SessionState = ST
     { errors      :: [REPLError]    -- ^ A list of all the errors so far.
     , loadingMode :: Bool           -- ^ Determines if the current state is originated from a @.load@ call
     , actualFile  :: Maybe FilePath -- ^ The file that was loaded by the @.load@ call
-    , env         :: Bool           -- ^ We need an environment to hold the variables in the future
-    } deriving Show
+    , env         :: STable         -- ^ We need an environment to hold the variables in the future
+    } 
 
 
 -- | Errors are formated as triples: <File name, Position, error msg>.
@@ -73,7 +76,7 @@ initialST = ST
     { errors      = []
     , loadingMode = False
     , actualFile  = Nothing 
-    , env         = False
+    , env         = iST 
     } 
 
 -------------------------------
@@ -129,6 +132,13 @@ safeReadFile p = (Right <$> readFile p) `catch` (pure . Left)
 -- | Get the current working file from our state.
 getCurrentFile :: StateParser String
 getCurrentFile = fromMaybe "." . actualFile <$> getState 
+
+-- | Get the current Environment of the REPL.
+getCurrentEnv :: StateParser STable 
+getCurrentEnv = env <$> getState 
+
+updateEnv :: STable -> StateParser ()
+updateEnv newEnv = modifyState (\st -> st{env=newEnv})
 
 -------------------------------
 -- Parsing Functions
@@ -335,14 +345,18 @@ parseLoad = do
 -- | A parse for the code is (temporarily) just an error.
 parseCode :: StateParser ()
 parseCode = do
-    i    <- getInput 
-    fc   <- alphaNum <?>  ("ERROR: " ++ show i ++ " ==> implementacion no implementada" )
-    args <- parseArg
+    input <- getInput 
+    f     <- getCurrentFile
     pos  <- getPosition 
-    f    <- getCurrentFile
-    let err = "ERROR: " ++ (fc:args) ++ " ==> implementacion no implementada"
-    putErr (f,pos,err)
-    liftIO $ putStrLn err 
+    environment <- getCurrentEnv
+    case runStateT (process input ) environment of
+        Left errorMsg -> do
+            let tError = (f,pos,errorMsg)
+            liftIO $ putStrLn errorMsg
+            putErr tError
+        Right (sucessMsg,newEnv) -> do
+            liftIO $ putStrLn sucessMsg
+            updateEnv newEnv
 
 
 

@@ -62,7 +62,8 @@ data Constant n
     deriving (Eq,Ord)
 
 -- | Lips types
-data LipsT = LInt | LBool | LLazy LipsT deriving (Eq,Ord)
+data LipsT = LInt | LBool | LLazy LipsT | Type | Void | ConstantT LipsT | Fun [LipsT] LipsT deriving (Eq,Ord)
+
 
 -- | Helper type to pretty print things
 newtype TS = T (Tree String)
