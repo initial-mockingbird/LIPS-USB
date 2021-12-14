@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-full-laziness #-}
 module Func.Func where
 {- |
 Module      : Func
@@ -33,7 +34,7 @@ iST = STable{getTable=t}
         d2 = IdState (Fun [LInt] LInt ) f2 undefined (get >>= (lift . fmap mkIC . irandom'))
 
         f3 = Var "now"
-        d3 = IdState (Fun [] LInt) f3 undefined (mkIC . (\ _ -> now ())  <$> get)
+        d3 = IdState (Fun [] LInt) f3 undefined (mkIC . (\ _ ->  now ())  <$> get)
         
         f4 = Var "reset"
         d4 = IdState (Fun [] Void) f4 undefined reset
