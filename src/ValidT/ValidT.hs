@@ -76,9 +76,9 @@ validateExp node tabla
         let (ex1,ex2) = takeFromBinaryExpr node 
         tipo1 <- validateExp ex1 tabla
         tipo2 <- validateExp ex2 tabla
-        if tipo1 == tipo2 then
+        if tipo1 `compareT` tipo2 then
             return (getTypeBinaryExpr node)
-        else if tipo1 /= tipo2 then 
+        else if not (tipo1 `compareT` tipo2) then 
             Left ("Tipos no coinciden " ++ show(ex1) ++" es de tipo = "++show(tipo1) ++ " mientras que "++show(ex2) ++" es de tipo "++show(tipo2))
         else
             Left ("No se puede aplicar el simbolo "++show(node) ++ " con "++ show(tipo1))

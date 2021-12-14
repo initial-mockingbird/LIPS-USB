@@ -42,10 +42,10 @@ iST = STable{getTable=t}
         d5 = IdState (Fun [Any] Any) sp0 undefined (type'' <$> get)
 
         sp1 = Var "ltype"
-        d6 = IdState (Fun [Any] Any) sp1 undefined (lType' <$> get)
+        d6 = IdState (Fun [Any] Any) sp1 undefined (get >>= (lift . lType'))
 
         sp2 = Var "cvalue"
-        d7 = IdState (Fun [Any] Any) sp2 undefined (cvalue' <$> get)
+        d7 = IdState (Fun [Any] Any) sp2 undefined (get >>= (lift . cvalue'))
 
         sp3 = Var "if"
         d8 = IdState (Fun [LBool,Any,Any] Any) sp3 undefined (get >>= (lift . if''))
@@ -80,10 +80,10 @@ type'' st = type' arg1 st
 lType :: Expr -> StateT STable Maybe LipsT
 lType = getExpLType
 
-lType' :: STable  -> Expr 
+lType' :: STable  -> Either String Expr 
 lType' st = case evalStateT (Func.Func.lType arg1) st of
-    Just t   -> Var $ show t
-    Nothing  -> Var "Error!"
+    Just t   -> Right . Var $ show t
+    Nothing  -> Left "Error! Expression doesn't have an L-Type"
     where
         [arg1] =   getLazyArgList "ltype" 1  st
 
@@ -91,10 +91,10 @@ cvalue :: Expr -> StateT STable Maybe Expr
 cvalue = getExpCValue
 
 
-cvalue' :: STable  -> Expr 
+cvalue' :: STable  -> Either String Expr 
 cvalue' st = case evalStateT (Func.Func.cvalue arg1) st of
-    Just t   -> t
-    Nothing  -> Var "Error!"
+    Just t   -> Right t
+    Nothing  -> Left  "Error! Expression doesn't have a C-Value"
     where
         [arg1] =   getLazyArgList "cvalue" 1  st 
 
