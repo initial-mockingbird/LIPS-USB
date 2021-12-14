@@ -47,6 +47,11 @@ import AST.AST
 import ValidT.ValidT hiding (initialST)
 import Func.Func
 import Control.Monad.State.Strict hiding (void)
+import Control.Monad.Except  (catchError)
+import qualified Control.Exception as Exc
+
+
+
 ------------------------------
 -- Types
 ------------------------------
@@ -343,11 +348,11 @@ parseLoad = do
     
     
 -- | A parse for the code is (temporarily) just an error.
-parseCode :: StateParser ()
-parseCode = do
+parseCode' :: StateParser ()
+parseCode' = do
     input <- getInput 
     f     <- getCurrentFile
-    pos  <- getPosition 
+    pos   <- getPosition 
     environment <- getCurrentEnv
     case runStateT (process input ) environment of
         Left errorMsg -> do
@@ -357,6 +362,22 @@ parseCode = do
         Right (sucessMsg,newEnv) -> do
             liftIO $ putStrLn sucessMsg
             updateEnv newEnv
+
+
+handler :: Exc.IOException -> StateParser ()
+handler e = do
+    lift $ putStrLn "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    let errorMsg = show e
+    f     <- getCurrentFile
+    pos   <- getPosition 
+    let tError = (f,pos,errorMsg)
+    liftIO $ putStrLn errorMsg
+    putErr tError
+
+parseCode :: StateParser ()
+parseCode = catchError parseCode' handler
+
+    
 
 
 

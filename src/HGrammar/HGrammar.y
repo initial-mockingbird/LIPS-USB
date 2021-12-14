@@ -104,6 +104,8 @@ Expr
     | Expr '||' Expr            { Or    $1 $3 }
     | Expr '&&' Expr            { And   $1 $3 }
     | TkId                      { Var   $1    }
+    | type                      { Var "type"  }
+    | if                        { Var "if"    }
     | '(' Expr ')'              {       $2    }
     | '`' Expr '`'              { Lazy  $2    }
     | FApp                      {       $1    }
@@ -116,7 +118,9 @@ Constant
     | TkNum                     { toNumC  $1      }
 
 FApp
-    : TkId '(' Args ')'         { FApp  $1 $3 }
+    : TkId   '(' Args ')'       { FApp  $1 $3 }
+    | type   '(' Args ')'       { FApp  "type" $3}
+    | if     '(' Args ')'       { FApp  "if" $3}
 
 
 

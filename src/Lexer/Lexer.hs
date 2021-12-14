@@ -217,7 +217,7 @@ tokenizer (x,col)
 checkOverflow :: String -> Bool
 checkOverflow xs = case xs of
     '-':_ -> (lxs <= lminb) && (signum ( read xs :: Int ) == -1)
-    _     -> (lxs <= lmaxb) && (signum ( read xs :: Int ) == 1)
+    _     -> (lxs <= lmaxb) && (signum ( read xs :: Int ) >= 0)
     where
         lminb = length $ show (minBound :: Int)
         lmaxb = length $ show (maxBound :: Int)

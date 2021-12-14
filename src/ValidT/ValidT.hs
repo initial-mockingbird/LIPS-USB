@@ -30,7 +30,7 @@ validateAction node tabla
         let (tipo1,name,exp) = takeDeclaration node
         tipoExp <- validateExp exp tabla
 
-        if tipo1 == tipoExp then
+        if tipo1 `compareT` tipoExp then
             return tipo1
         else
             Left ("Declaracion invalida de "++name++" | la expresion a la derecha es de tipo "++show(tipoExp) ++ " y la variable debe ser "++show(tipo1) )
@@ -39,7 +39,7 @@ validateAction node tabla
         tipo1 <- lookupType name tabla
         tipoExp <- validateExp exp tabla
 
-        if tipo1 == tipoExp then
+        if tipo1 `compareT` tipoExp then
             return tipo1
         else
             Left ("Declaracion invalida de "++name++" | Declarada como "++show(tipo1) ++ " pero estas asignando " ++ show(tipoExp) )
@@ -55,10 +55,10 @@ validateExp node tabla
     | exprIsFApp node = do 
         let (name, lista) = takeFApp node 
         tiposParam <- traverse (`validateExp` tabla) lista
-        (tipoF, tiposF) <- getFunc name 
+        (tipoF, tiposF) <- getFunc name tabla
 
         if length tiposParam == length tiposF then
-            if tiposParam == tiposF then
+            if and $ zipWith compareT tiposParam  tiposF then
                 return tipoF
             else 
                 Left ("Error en tipos de parametros en llamada a funcion "++name ++ " los correctos tipos son = "++show(tiposParam))
@@ -86,13 +86,25 @@ validateExp node tabla
     | otherwise = Left "Error tipo de expresion no reconocido"
 
 -- Definicion de firmas de funciones (return, tipos de los param)
-getFunc :: String -> Either String (LipsT,[LipsT])
+getFunc :: String -> STable -> Either String (LipsT,[LipsT])
+getFunc name st@STable{getTable=t} = case Map.lookup ( Var name) t of
+    Nothing       -> Left ("No existe la funcion "++name)
+    Just idState  -> Right (res,args)
+        where
+            (Fun args res) = lType idState
+
+compareT :: LipsT -> LipsT -> Bool
+compareT Any _ = True
+compareT _ Any = True
+compareT a b   = a == b
+
+{-
 getFunc "irandom" = Right (LInt,[LInt])
 getFunc "fibo" = Right (LInt,[LInt])
 getFunc "gcd" = Right (LInt,[LInt,LInt])
 getFunc "now" = Right (LInt,[])
 getFunc name = Left ("No existe la funcion "++name)
-
+-}
 var =  C ( NumConstant 2 ) 
 myVar =  C ( BConstant True ) 
 tablaVacia = Map.empty
@@ -135,15 +147,18 @@ addIdState e eID f = modify $ STable . Map.insertWith f e eID . getTable
 
 -- | Tries to Update the Symbol Table 
 updateST :: Monad m => S -> StateT STable m ()
-updateST (A (Declaration t vName e)) = addIdState (Var vName) vState const 
-    where
-        vState = IdState t (Var vName) e (eval' e)
+updateST (A (Declaration t vName e)) = do 
+    e' <- eval' e 
+    let vState = IdState t (Var vName) e' (eval' e')
+    addIdState (Var vName) vState const 
+        
 updateST (A (Assignment vName expr)) = do 
     t <- (! Var vName) . getTable <$> get
+    e' <- eval' expr
     let newState = IdState { lType  = lType t
         , lValue = lValue t
-        , cValue = expr
-        , rValue = eval' expr 
+        , cValue = e'
+        , rValue = eval' e'
         }
     addIdState (Var vName) newState const 
     
@@ -181,17 +196,18 @@ lookupType' ef var STable{getTable=table} = case Map.lookup var table of
 lookupType :: String -> STable -> Either String LipsT
 lookupType vName = lookupType' ("La variable: '" ++ vName ++ "' no ha sido declarada, error de asignacion!.") (Var vName)
 
-getExpLType :: STable -> Identifier  -> Maybe LipsT
-getExpLType st (FApp v _)         = getExpLType st (Var v)
-getExpLType STable{getTable=t } e = lType <$> Map.lookup e t
+getExpLType :: Identifier  -> StateT STable Maybe LipsT
+getExpLType (FApp v _) = getExpLType (Var v) 
+getExpLType e = lift . (fmap lType . Map.lookup e) . getTable =<< get
 
-getExpType :: STable -> Expr -> LipsT
-getExpType st e = t
-    where
-        Right t = validate (E e) st
+    
+getExpType :: (Monad m, MonadFail m) => Expr -> StateT STable m LipsT
+getExpType e = do 
+    Right t <- validate (E e) <$> get 
+    return t 
 
-getExpCValue :: STable -> Identifier  -> Maybe Expr
-getExpCValue STable{getTable=t } e = cValue <$> Map.lookup e t
+getExpCValue ::  Identifier -> StateT STable Maybe Expr
+getExpCValue e = lift . (fmap cValue . Map.lookup e) . getTable =<< get 
 
 
 
@@ -307,6 +323,10 @@ getArgList fName nArgs st@STable{getTable=t} =  ($ st) . getRValue  <$> argsName
     where
         argsNames = [ Var $ fName ++ "@" ++ show n | n <- [1..nArgs]]
 
+getLazyArgList :: String -> Int -> STable -> [Expr]
+getLazyArgList fName nArgs st@STable{getTable=t} =  cValue . (t !)  <$> argsNames
+    where
+        argsNames = [ Var $ fName ++ "@" ++ show n | n <- [1..nArgs]]
 
 
 dummyPlus :: Int -> Int -> Int -> Int

@@ -62,7 +62,7 @@ data Constant n
     deriving (Eq,Ord)
 
 -- | Lips types
-data LipsT = LInt | LBool | LLazy LipsT | Type | Void | ConstantT LipsT | Fun [LipsT] LipsT deriving (Eq,Ord)
+data LipsT = LInt | LBool | LLazy LipsT | Type | Void  | Any | ConstantT LipsT | Fun [LipsT] LipsT deriving (Eq,Ord)
 
 
 -- | Helper type to pretty print things
@@ -76,6 +76,12 @@ instance Show LipsT where
     show LInt      = "int"
     show LBool     = "bool"
     show (LLazy t) = "lazy " ++ show t
+    show Type      = "type"
+    show Void      = "()"
+    show Any       = "Any"
+    show (ConstantT t) = "Constant " ++ show t
+    show (Fun ts t) = "fun(" ++ intercalate "," [show t' | t' <- ts] ++ ") -> " ++ show t
+
 
 -- Since we have already a tree of strings that represents
 -- we might as well defined the desired showAST as an pre-order
