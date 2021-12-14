@@ -348,8 +348,8 @@ parseLoad = do
     
     
 -- | A parse for the code is (temporarily) just an error.
-parseCode' :: StateParser ()
-parseCode' = do
+parseCode :: StateParser ()
+parseCode = do
     input <- getInput 
     f     <- getCurrentFile
     pos   <- getPosition 
@@ -363,19 +363,6 @@ parseCode' = do
             liftIO $ putStrLn sucessMsg
             updateEnv newEnv
 
-
-handler :: Exc.IOException -> StateParser ()
-handler e = do
-    lift $ putStrLn "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-    let errorMsg = show e
-    f     <- getCurrentFile
-    pos   <- getPosition 
-    let tError = (f,pos,errorMsg)
-    liftIO $ putStrLn errorMsg
-    putErr tError
-
-parseCode :: StateParser ()
-parseCode = catchError parseCode' handler
 
     
 

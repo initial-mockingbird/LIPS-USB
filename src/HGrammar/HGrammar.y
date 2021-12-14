@@ -2,7 +2,7 @@
 module HGrammar.HGrammar (toAST, sToTree, prettyPrintS, parse ) where
 
 import Data.Char
-import Lexer.Lexer (Token(..), manyToken)
+import Lexer.Lexer (Token(..), manyToken, PrettyToken(..))
 import Data.Tree  
 import Data.Tree.Pretty (drawVerticalTree)
 import AST.AST
@@ -143,7 +143,7 @@ Unary
 
 {
 parseError :: [Token] -> Either (String,Int) a
-parseError fault = Left $ ("Parse error at expression: " ++ intercalate " " (map show fault), length fault)
+parseError fault = Left $ ("Parse error at expression: " ++ intercalate " " (map (show . PT) fault), length fault)
 parseError []    = Left ("Lambda does not belong to the language",-1)
 
 toNumC :: Int -> Expr

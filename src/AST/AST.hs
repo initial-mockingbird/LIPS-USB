@@ -46,6 +46,7 @@ data Expr
     | FApp   String [Expr]
     | Lazy   Expr
     | SeqE   Expr S
+    | EString String
     deriving (Eq, Ord)
 
 -- | Action tree
@@ -64,6 +65,70 @@ data Constant n
 -- | Lips types
 data LipsT = LInt | LBool | LLazy LipsT | Type | Void  | Any | ConstantT LipsT | Fun [LipsT] LipsT deriving (Eq,Ord)
 
+-- si el hijo tiene menor precedencia, agrupelo con parentesis.
+getPrec :: Expr -> Int
+getPrec (Lazy _)    = 10
+getPrec (Var _)     = 10
+getPrec (FApp _ _)  = 10
+getPrec (C _)       = 10 
+getPrec (EString _) = 10
+getPrec (Pow _ _)   = 9
+getPrec (Negate _)  = 8
+getPrec (Not _)     = 8
+getPrec (Pos _)     = 8
+getPrec (Times _ _) = 7
+getPrec (Mod _ _)   = 7
+getPrec (Plus _ _)  = 6
+getPrec (Minus _ _) = 6
+getPrec (LT _ _)    = 5
+getPrec (GT _ _)    = 5
+getPrec (LE _ _)    = 5
+getPrec (GE _ _)    = 5
+getPrec (EQ _ _)    = 4
+getPrec (NEQ _ _)   = 4
+getPrec (And _ _)   = 3
+getPrec (Or _ _)    = 2
+getPrec (SeqE _ _)  = 1 
+
+regenerateChild :: Expr -> Expr -> String
+regenerateChild father child 
+    | getPrec father > getPrec child = "(" ++ regenerateExpr child ++ ")"
+    | otherwise                      = regenerateExpr child
+
+regenerateExpr :: Expr -> String
+regenerateExpr n@(Negate e)                 = '-' : regenerateChild n e
+regenerateExpr (Pos e)                      = regenerateExpr e
+regenerateExpr n@(Not e)                    = '!' : regenerateChild n e
+regenerateExpr p@(Plus a b)                 = regenerateChild p a ++ " + " ++ regenerateChild p b
+regenerateExpr m@(Minus a b)                = regenerateChild m a ++ " - " ++ regenerateChild m b
+regenerateExpr t@(Times a b)                = regenerateChild t a ++ " * " ++ regenerateChild t b
+regenerateExpr m@(Mod a b)                  = regenerateChild m a ++ " % " ++ regenerateChild m b
+regenerateExpr p@(Pow a b)                  = regenerateChild p a ++ " ^ " ++ regenerateChild p b
+regenerateExpr c@(LT a b)                   = regenerateChild c a ++ " < " ++ regenerateChild c b
+regenerateExpr c@(GT a b)                   = regenerateChild c a ++ " > " ++ regenerateChild c b
+regenerateExpr c@(LE a b)                   = regenerateChild c a ++ " <= " ++ regenerateChild c b
+regenerateExpr c@(GE a b)                   = regenerateChild c a ++ " >= " ++ regenerateChild c b
+regenerateExpr c@(EQ a b)                   = regenerateChild c a ++ " = " ++ regenerateChild c b
+regenerateExpr c@(NEQ a b)                  = regenerateChild c a ++ " <> " ++ regenerateChild c b 
+regenerateExpr c@(Or a b)                   = regenerateChild c a ++ " || " ++ regenerateChild c b 
+regenerateExpr c@(And a b)                  = regenerateChild c a ++ " && " ++ regenerateChild c b
+regenerateExpr c@(Lazy a)                   = "'" ++ regenerateExpr a ++ "'"
+regenerateExpr (FApp fName args)            = fName ++ "(" ++ intercalate "," (map regenerateExpr args) ++ ")"
+regenerateExpr (Var vName)                  = vName
+regenerateExpr (C (NumConstant n))          = show n
+regenerateExpr (C (BConstant b))            = show b
+regenerateExpr (EString s)                  = show s
+regenerateExpr c@(SeqE a b)                 = undefined
+
+
+regenerateAction :: Action -> String
+regenerateAction (Declaration t vName e) = show t ++ " " ++ vName ++ " := " ++ regenerateExpr e
+regenerateAction (Assignment  vName e)   = vName ++ " := " ++ regenerateExpr e
+regenerateAction _                       = undefined 
+
+regenerateS :: S -> String
+regenerateS (A a) = regenerateAction a
+regenerateS (E e) = regenerateExpr e
 
 -- | Helper type to pretty print things
 newtype TS = T (Tree String)
@@ -118,25 +183,26 @@ actionToTree (SeqA a s) = Node {rootLabel= "Sequence", subForest=[actionToTree a
 
 -- | Transforms the Expr tree into a Tree type
 exprToTree :: Expr -> Tree String
-exprToTree (Negate e)  = Node {rootLabel= "UMinus" , subForest=[exprToTree e]}
-exprToTree (Pos    e)  = Node {rootLabel= "UPlusr" , subForest=[exprToTree e]}
-exprToTree (Not    e)  = Node {rootLabel= "!" , subForest=[exprToTree e]}
-exprToTree (Plus a b)  = Node {rootLabel= "+"     , subForest=[exprToTree a, exprToTree b]}
-exprToTree (Minus a b) = Node {rootLabel= "-"     , subForest=[exprToTree a, exprToTree b]}
-exprToTree (Times t t')= Node {rootLabel= "*"     , subForest=[exprToTree t, exprToTree t' ]}
-exprToTree (Mod t t')  = Node {rootLabel= "%"     , subForest=[exprToTree t, exprToTree t' ]}
-exprToTree (Pow t t')  = Node {rootLabel= "^"     , subForest=[exprToTree t, exprToTree t' ]}
+exprToTree (Negate e)  = Node {rootLabel= "UMinus"     , subForest=[exprToTree e]}
+exprToTree (Pos    e)  = Node {rootLabel= "UPlus"      , subForest=[exprToTree e]}
+exprToTree (Not    e)  = Node {rootLabel= "!"          , subForest=[exprToTree e]}
+exprToTree (Plus a b)  = Node {rootLabel= "+"          , subForest=[exprToTree a, exprToTree b]}
+exprToTree (Minus a b) = Node {rootLabel= "-"          , subForest=[exprToTree a, exprToTree b]}
+exprToTree (Times t t')= Node {rootLabel= "*"          , subForest=[exprToTree t, exprToTree t' ]}
+exprToTree (Mod t t')  = Node {rootLabel= "%"          , subForest=[exprToTree t, exprToTree t' ]}
+exprToTree (Pow t t')  = Node {rootLabel= "^"          , subForest=[exprToTree t, exprToTree t' ]}
 exprToTree (Var v)     = Node {rootLabel= "Var " ++ v  , subForest=[]}
-exprToTree (EQ p q)    = Node {rootLabel= "="     , subForest=[exprToTree p, exprToTree q]}
-exprToTree (NEQ p q)   = Node {rootLabel= "<>"    , subForest=[exprToTree p, exprToTree q]}
-exprToTree (LT p q)    = Node {rootLabel= "<"     , subForest=[exprToTree p, exprToTree q]}
-exprToTree (GT p q)    = Node {rootLabel= ">"     , subForest=[exprToTree p, exprToTree q]}
-exprToTree (LE p q)    = Node {rootLabel= "<="    , subForest=[exprToTree p, exprToTree q]}
-exprToTree (GE p q)    = Node {rootLabel= ">="    , subForest=[exprToTree p, exprToTree q]}
-exprToTree (Or p q)    = Node {rootLabel= "||"    , subForest=[exprToTree p, exprToTree q]}
-exprToTree (And p q)   = Node {rootLabel= "&&"    , subForest=[exprToTree p, exprToTree q]}
-exprToTree (Lazy e)    = Node {rootLabel= "LazyE", subForest=[exprToTree e]}
-exprToTree (SeqE e s)  = Node {rootLabel= "Sequence", subForest=[exprToTree e, sToTree s]}
+exprToTree (EQ p q)    = Node {rootLabel= "="          , subForest=[exprToTree p, exprToTree q]}
+exprToTree (NEQ p q)   = Node {rootLabel= "<>"         , subForest=[exprToTree p, exprToTree q]}
+exprToTree (LT p q)    = Node {rootLabel= "<"          , subForest=[exprToTree p, exprToTree q]}
+exprToTree (GT p q)    = Node {rootLabel= ">"          , subForest=[exprToTree p, exprToTree q]}
+exprToTree (LE p q)    = Node {rootLabel= "<="         , subForest=[exprToTree p, exprToTree q]}
+exprToTree (GE p q)    = Node {rootLabel= ">="         , subForest=[exprToTree p, exprToTree q]}
+exprToTree (Or p q)    = Node {rootLabel= "||"         , subForest=[exprToTree p, exprToTree q]}
+exprToTree (And p q)   = Node {rootLabel= "&&"         , subForest=[exprToTree p, exprToTree q]}
+exprToTree (Lazy e)    = Node {rootLabel= "LazyE"      , subForest=[exprToTree e]}
+exprToTree (SeqE e s)  = Node {rootLabel= "Sequence"   , subForest=[exprToTree e, sToTree s]}
+exprToTree (EString s) = Node {rootLabel= s            , subForest=[]}
 exprToTree (C c)       = case c of
         BConstant b   -> Node {rootLabel= show b  , subForest=[]}
         NumConstant n -> Node {rootLabel= show n  , subForest=[]}

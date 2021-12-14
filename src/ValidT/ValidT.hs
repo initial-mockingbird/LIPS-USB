@@ -181,10 +181,10 @@ process input = do
     case ast of
         (A action) -> do
             updateST ast
-            lift . Right $ "ACK: " ++ show ast
+            lift . Right $ "ACK: " ++ regenerateS ast
         (E expr) -> do
             resExpr <- eval' expr
-            lift . Right $ "OK: " ++ show ast ++ "==>" ++ show resExpr
+            lift . Right $ "OK: " ++ regenerateS ast ++ " ==> " ++ regenerateExpr resExpr
 
 
 lookupType' :: String -> Identifier -> STable -> Either String LipsT
@@ -198,7 +198,11 @@ lookupType vName = lookupType' ("La variable: '" ++ vName ++ "' no ha sido decla
 
 getExpLType :: Identifier  -> StateT STable Maybe LipsT
 getExpLType (FApp v _) = getExpLType (Var v) 
-getExpLType e = lift . (fmap lType . Map.lookup e) . getTable =<< get
+getExpLType e = lift . funChecker . fmap lType . Map.lookup e . getTable =<< get
+    where
+        funChecker :: Maybe LipsT -> Maybe LipsT
+        funChecker (Just (Fun _ _)) = Nothing 
+        funChecker ml               = ml 
 
     
 getExpType :: (Monad m, MonadFail m) => Expr -> StateT STable m LipsT
@@ -207,7 +211,11 @@ getExpType e = do
     return t 
 
 getExpCValue ::  Identifier -> StateT STable Maybe Expr
-getExpCValue e = lift . (fmap cValue . Map.lookup e) . getTable =<< get 
+getExpCValue e = lift . getCValue . Map.lookup e . getTable =<< get 
+    where
+        getCValue :: Maybe IdState -> Maybe Expr
+        getCValue (Just IdState{lType=Fun _ _}) = Nothing
+        getCValue mid                           = cValue <$> mid 
 
 
 

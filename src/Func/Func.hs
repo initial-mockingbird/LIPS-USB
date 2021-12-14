@@ -65,11 +65,11 @@ if'' st = if' st arg1 arg2 arg3
         [arg1,arg2,arg3] =  getLazyArgList "if" 3  st
 
 type' :: Expr -> STable  -> Expr 
-type' (Var "type")   _ =  Var "type"
-type' (Var "ltype")  _ =  Var "type"
-type' (Var "if")     _ =  Var "any"
-type' (Var "cvalue") _ =  Var "any"
-type' e              st = Var . show . fromRight $ validate (E e) st
+type' (Var "type")   _ =  EString "type"
+type' (Var "ltype")  _ =  EString "type"
+type' (Var "if")     _ =  EString "any"
+type' (Var "cvalue") _ =  EString "any"
+type' e              st = EString  . show . fromRight $ validate (E e) st
     where
         fromRight (Right a) = a 
 
@@ -83,7 +83,7 @@ lType = getExpLType
 
 lType' :: STable  -> Either String Expr 
 lType' st = case evalStateT (Func.Func.lType arg1) st of
-    Just t   -> Right . Var $ show t
+    Just t   -> Right . EString $ show t
     Nothing  -> Left "Error! Expression doesn't have an L-Type"
     where
         [arg1] =   getLazyArgList "ltype" 1  st

@@ -54,49 +54,51 @@ data Token
     | TkLazy         -- ^ @ lazy @
     deriving (Eq,Show)
 
-{-
-instance Show Token where
-    show (TkId var)     = var    
-    show (TkNum n)      = show n
-    show TkTrue         = "True"   
-    show TkFalse        = "False"   
-    show TkOpenPar      = "("   
-    show TkClosePar     = ")"   
-    show TkPower        = "^"   
-    show TkPlus         = "+"   
-    show TkMinus        = "-"   
-    show TkNot          = "!"   
-    show TkMult         = "*"   
-    show TkMod          = "Mod"   
-    show TkLT           = "<"   
-    show TkLE           = "<="   
-    show TkGE           = ">="   
-    show TkGT           = ">"   
-    show TkEQ           = "="   
-    show TkNE           = "<>"   
-    show TkAnd          = "&&"   
-    show TkOr           = "||"   
-    show TkQuote        = "'"   
-    show TkComma        = ","   
-    show TkAssign       = ":="   
-    show TkSemicolon    = ";"  
-    show TkYields       = "=>"  
-    show TkRArrow       = "->"  
-    show TkLArrow       = "<-"  
-    show TkOpenBracket  = "["
-    show TkCloseBracket = "]"
-    show TkOpenBrace    = "{"
-    show TkCloseBrace   = "}"
-    show TkDot          = "."
-    show TkColon        = ":"
-    show TkColonColon   = "::"
-    show TkWhile        = "while"
-    show TkIf           = "if"
-    show TkInt          = "int"
-    show TkBool         = "bool"
-    show TkType         = "type"
-    show TkLazy         = "lazy"
--}
+newtype PrettyToken = PT Token 
+
+
+instance Show PrettyToken where
+    show (PT (TkId var))     = var    
+    show (PT (TkNum n))      = show n
+    show (PT TkTrue)         = "True"   
+    show (PT TkFalse)        = "False"   
+    show (PT TkOpenPar)      = "("   
+    show (PT TkClosePar)     = ")"   
+    show (PT TkPower)        = "^"   
+    show (PT TkPlus)         = "+"   
+    show (PT TkMinus)        = "-"   
+    show (PT TkNot)          = "!"   
+    show (PT TkMult)         = "*"   
+    show (PT TkMod)          = "Mod"   
+    show (PT TkLT)           = "<"   
+    show (PT TkLE)           = "<="   
+    show (PT TkGE)           = ">="   
+    show (PT TkGT)           = ">"   
+    show (PT TkEQ)           = "="   
+    show (PT TkNE)           = "<>"   
+    show (PT TkAnd)          = "&&"   
+    show (PT TkOr)           = "||"   
+    show (PT TkQuote)        = "'"   
+    show (PT TkComma)        = ","   
+    show (PT TkAssign)       = ":="   
+    show (PT TkSemicolon)    = ";"  
+    show (PT TkYields)       = "=>"  
+    show (PT TkRArrow)       = "->"  
+    show (PT TkLArrow)       = "<-"  
+    show (PT TkOpenBracket)  = "["
+    show (PT TkCloseBracket) = "]"
+    show (PT TkOpenBrace)    = "{"
+    show (PT TkCloseBrace)   = "}"
+    show (PT TkDot)          = "."
+    show (PT TkColon)        = ":"
+    show (PT TkColonColon)   = "::"
+    show (PT TkWhile)        = "while"
+    show (PT TkIf)           = "if"
+    show (PT TkInt)          = "int"
+    show (PT TkBool)         = "bool"
+    show (PT TkType)         = "type"
+    show (PT TkLazy)         = "lazy"
+
 
 -- | Auxiliary type, will provide a "logged" version of Either
 newtype LEither a = L (Either [(String,Int)] a)

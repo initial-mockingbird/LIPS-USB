@@ -11,13 +11,13 @@ Portability : POSIX
 
 
 import           Lexer.Lexer            (Token (TkAnd, TkAssign, TkBool, TkCloseBrace, TkClosePar, TkComma, TkEQ, TkFalse, TkGE, TkGT, TkId, TkIf, TkInt, TkLE, TkLT, TkLazy, TkMinus, TkMod, TkMult, TkNE, TkNot, TkNum, TkOpenBrace, TkOpenPar, TkOr, TkPlus, TkPower, TkQuote, TkSemicolon, TkTrue, TkType, TkWhile),
-                                         manyToken)
+                                         manyToken, PrettyToken(..))
 import           Text.Parsec            (ParsecT, SourcePos, anyToken, between,
                                          eof, errorPos, getPosition,
                                          incSourceColumn, many, notFollowedBy,
                                          runParserT, sepBy, setPosition,
                                          setSourceColumn, tokenPrim, (<?>),
-                                         (<|>))
+                                         (<|>), getInput)
 import           Text.Parsec.Combinator (anyToken, between, eof, notFollowedBy,
                                          sepBy)
 
@@ -100,6 +100,20 @@ isId = tokenPrim  show g f
         f _        = Nothing
         g pos _ _  = incSourceColumn pos 1
 
+isIf :: Monad m => ParsecT [Token] u m Expr
+isIf = tokenPrim  show g f
+    where
+        f TkIf  = Just $ Var "if"
+        f _        = Nothing
+        g pos _ _  = incSourceColumn pos 1
+
+isType :: Monad m => ParsecT [Token] u m Expr
+isType = tokenPrim  show g f
+    where
+        f TkIf  = Just $ Var "type"
+        f _        = Nothing
+        g pos _ _  = incSourceColumn pos 1
+
 -- | Builds an expression parser for the tokenNum
 isNum :: Monad m => ParsecT [Token] u m Expr
 isNum = tokenPrim show g f
@@ -145,6 +159,30 @@ isLazyT = tokenPrim show g f
 isIdOrFapp :: SP m Expr
 isIdOrFapp = do
     var@(Var fName) <- isId
+    let fapp' = do
+            pOP
+            fArgs <- pArgs <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
+            notFollowedBy pComma <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
+            pCP <?> ("Error in function '" ++ fName ++ "': Non closing Parenthesis found.")
+            return $ FApp fName fArgs
+
+    fapp' <|> return var
+
+isIf' :: SP m Expr
+isIf' = do
+    var@(Var fName) <- isIf
+    let fapp' = do
+            pOP
+            fArgs <- pArgs <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
+            notFollowedBy pComma <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
+            pCP <?> ("Error in function '" ++ fName ++ "': Non closing Parenthesis found.")
+            return $ FApp fName fArgs
+
+    fapp' <|> return var
+
+isType' :: SP m Expr
+isType' = do
+    var@(Var fName) <- isType
     let fapp' = do
             pOP
             fArgs <- pArgs <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
@@ -238,7 +276,7 @@ pP6 = g <$> A.optional (many uOP) <*> (toETree <$> pP7 <*> many ((,) <$> p6Ops <
 
 -- | Parses a precedence 7 expression
 pP7 :: SP m Expr
-pP7 =  pParenE <|> pQuoteE <|> isNum <|> isBool <|> isIdOrFapp <?> "Parse error: Bad terminal"
+pP7 =  pParenE <|> pQuoteE <|> isNum <|> isBool <|> isIf' <|> isType' <|> isIdOrFapp <|> (getInput >>= \s -> fail $ "Parse error, unexpected character: " ++ show (PT $ head s)) 
     where
         pParenE = between pOP    (pCP    <?> "Non closing parenthesis Found") pExpr
         pQuoteE = between pQuote (pQuote <?> "Non closing Quote found Found") ( Lazy <$> pExpr)
