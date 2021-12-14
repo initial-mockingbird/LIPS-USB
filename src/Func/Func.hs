@@ -24,13 +24,13 @@ iST = STable{getTable=t}
     where
         
         f0 = Var "gcd"
-        d0 = IdState (Fun [LInt, LInt ] LInt ) f0 undefined (gcd' <$> get)
+        d0 = IdState (Fun [LInt, LInt ] LInt ) f0 undefined (get >>= (lift . gcd'))
 
         f1 = Var "fibo"
-        d1 = IdState (Fun [LInt ] LInt) f1 undefined (fibo' <$> get)
+        d1 = IdState (Fun [LInt ] LInt) f1 undefined (get >>= (lift . fibo'))
 
         f2 = Var "irandom"
-        d2 = IdState (Fun [LInt] LInt ) f2 undefined (mkIC . irandom' <$> get)
+        d2 = IdState (Fun [LInt] LInt ) f2 undefined (get >>= (lift . fmap mkIC . irandom'))
 
         f3 = Var "now"
         d3 = IdState (Fun [] LInt) f3 undefined (mkIC . (\ _ -> now ())  <$> get)
@@ -48,17 +48,17 @@ iST = STable{getTable=t}
         d7 = IdState (Fun [Any] Any) sp2 undefined (cvalue' <$> get)
 
         sp3 = Var "if"
-        d8 = IdState (Fun [LBool,Any,Any] Any) sp3 undefined (if'' <$> get)
+        d8 = IdState (Fun [LBool,Any,Any] Any) sp3 undefined (get >>= (lift . if''))
 
         t = Map.fromList [(f0,d0),(f1,d1),(f2,d2),(f3,d3), (f4,d4), (sp0,d5), (sp1,d6), (sp2,d7),(sp3,d8)]
 
 
-if' :: STable -> Expr -> Expr -> Expr -> Expr
+if' :: STable -> Expr -> Expr -> Expr -> Either String Expr
 if' st b e e' = case evalStateT (evalBool b) st of
-    Just b' -> if b' then evalState (eval' e) st else evalState (eval' e') st
-    _       -> error "Impossible case"
+    Right b' -> if b' then evalStateT (eval' e) st else evalStateT (eval' e') st
+    Left e   -> Left e
 
-if'' :: STable -> Expr 
+if'' :: STable -> Either String Expr 
 if'' st = if' st arg1 arg2 arg3
     where
         [arg1,arg2,arg3] =  getLazyArgList "if" 3  st
@@ -75,7 +75,7 @@ type' e              st = Var . show . fromRight $ validate (E e) st
 type'' :: STable  -> Expr 
 type'' st = type' arg1 st 
     where
-        [arg1] =   getArgList "type" 1  st
+        [arg1] =   getLazyArgList "type" 1  st
 
 lType :: Expr -> StateT STable Maybe LipsT
 lType = getExpLType
@@ -103,17 +103,19 @@ reset = put iST >> return (mkBC True)
 
 {-# NOINLINE irandom #-}
 -- | Random number generator
-irandom :: Int -> IO Int
+irandom :: Int -> IO (Either String Int)
 irandom n
-    | n > 0 = randomRIO (0, n - 1)
-    | otherwise = error "The upper limit must be at least zero"
+    | n > 0 = Right <$> randomRIO (0, n - 1)
+    | otherwise = return $ Left "The upper limit must be at least zero"
 
 
-irandom' :: STable -> Int
-irandom' st = unsafePerformIO $ irandom arg1
-    where
-        prod =  traverse evalArithm  $ getArgList "irandom" 1  st
-        Just [arg1] = evalStateT prod st
+irandom' :: STable -> Either String Int
+irandom' st = case  traverse evalArithm  <$> getArgList "irandom" 1 st of
+    Left errMsg -> Left errMsg
+    Right exprs -> 
+        let Right [arg1] = evalStateT exprs st 
+        in  unsafePerformIO $ irandom arg1
+
 
 -- | Fibonacci calculator
 fibo :: Int -> Int
@@ -121,17 +123,20 @@ fibo n = fib !! n
     where
         fib = 0 : 1 : [a + b | (a, b) <- zip fib (tail fib)]
 
-fibo' :: STable -> Expr
-fibo' st =  mkIC (fibo arg1)
-    where
-        prod =  traverse evalArithm  $ getArgList "fibo" 1  st
-        Just [arg1] = evalStateT prod st
+fibo' :: STable -> Either String Expr
+fibo' st =  case  traverse evalArithm  <$> getArgList "fibo" 1 st of
+    Left errMsg -> Left errMsg
+    Right exprs -> 
+        let Right [arg1] = evalStateT exprs st 
+        in  Right . mkIC $ fibo arg1
 
-gcd' :: STable -> Expr
-gcd' st =  mkIC (gcd arg1 arg2)
-    where
-        prod =  traverse evalArithm  $ getArgList "gcd" 2  st
-        Just [arg1,arg2] = evalStateT prod st
+
+gcd' :: STable -> Either String Expr
+gcd' st = case  traverse evalArithm  <$> getArgList "gcd" 2 st of
+    Left errMsg -> Left errMsg
+    Right exprs -> 
+        let Right [arg1,arg2] = evalStateT exprs st 
+        in  Right . mkIC $ gcd arg1 arg2
 
 
 -- | Milliseconds elapsed since January 1, 1970 at midnight UTC time 

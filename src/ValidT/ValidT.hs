@@ -138,7 +138,7 @@ data IdState = IdState
     { lType  :: LipsT                  -- ^ The variable type
     , lValue :: Expr                   -- ^ The L-value of the variable
     , cValue :: Expr                   -- ^ The C-value of the variable
-    , rValue :: State STable Expr  -- ^ A way to calculate the rValue of a variable.
+    , rValue :: StateT STable (Either String) Expr  -- ^ A way to calculate the rValue of a variable.
     }
 
 -- | Aux function that modifies an entry in the Symbol table.
@@ -146,7 +146,7 @@ addIdState :: Monad m => Identifier -> IdState -> (IdState -> IdState -> IdState
 addIdState e eID f = modify $ STable . Map.insertWith f e eID . getTable
 
 -- | Tries to Update the Symbol Table 
-updateST :: Monad m => S -> StateT STable m ()
+updateST :: S -> StateT STable (Either String) ()
 updateST (A (Declaration t vName e)) = do 
     e' <- eval' e 
     let vState = IdState t (Var vName) e' (eval' e')
@@ -211,8 +211,8 @@ getExpCValue e = lift . (fmap cValue . Map.lookup e) . getTable =<< get
 
 
 
-getRValue :: Identifier -> STable -> Expr
-getRValue v st@STable{getTable=t} = evalState prod st
+getRValue :: Identifier -> STable -> Either String Expr
+getRValue v st@STable{getTable=t} = evalStateT prod st
     where
         prod = rValue  (t ! v) 
 
@@ -231,25 +231,29 @@ setIdentifier :: String -> Expr -> LipsT -> STable -> STable
 setIdentifier vName = setIdentifier' (Var vName)
 
 -- | Dummy eval
-eval' :: Monad a => Expr -> StateT STable a Expr 
-eval' expr = hoist (generalize . fromJust) $ eL <+> eA <+> eB <+> eF 
+eval' :: Expr -> StateT STable (Either String) Expr 
+eval' expr =  eL <+> eA <+> eB <+> eF 
     where
-        fromJust (Just a) = Identity a
         (<+>) = mplus  
         eA = mkIC <$> evalArithm expr 
         eB = mkBC <$> evalBool expr
         eL = evalLazy expr
         eF = evalFApp expr
 
-eval :: S -> StateT STable Maybe S
-eval (E e) = hoist generalize  $ E <$> eval' e
-eval _     = lift Nothing 
+eval :: S -> StateT STable (Either String) S
+eval (E e) = E <$> eval' e
+eval _     = lift (Left "")
 
 
-queryVal :: Expr -> StateT STable Maybe Expr 
-queryVal e = hoist generalize . rValue .  (! e) . getTable =<< get 
+eitherToMaybe :: Either b a -> Maybe a
+eitherToMaybe (Right a) = Just a
+eitherToMaybe (Left _)  = Nothing 
 
-evalArithm :: Expr -> StateT STable Maybe Int
+queryVal :: Expr -> StateT STable (Either String) Expr 
+queryVal e = rValue .  (! e) . getTable =<< get 
+
+
+evalArithm :: Expr -> StateT STable (Either String) Int
 evalArithm (C (NumConstant  n)) = return n
 evalArithm  (Negate e)  = (* (-1)) <$> evalArithm e
 evalArithm  (Pos e)     = evalArithm  e
@@ -259,41 +263,60 @@ evalArithm  (Mod a b)   = mod <$> evalArithm a <*> evalArithm b
 evalArithm  (Times a b) = (*) <$> evalArithm a <*> evalArithm b
 evalArithm  (Pow a b)   = (^) <$> evalArithm a <*> evalArithm b
 evalArithm v@(Var _)    = do 
-    (C (NumConstant n)) <- queryVal v  
-    return  n
-evalArithm  _           = lift Nothing 
+    e' <- queryVal v  
+    case e' of
+        (C (NumConstant n))  -> return n
+        e                    -> lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo aritmetico")
+evalArithm f@(FApp vName _) = do
+    e' <- evalFApp f
+    case e' of
+        (C (NumConstant n))  -> return n
+        e                    -> lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo aritmetico")
+evalArithm  e           = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo aritmetico")
 
 
-bCast :: Expr -> StateT STable Maybe Bool
+bCast :: Expr -> StateT STable (Either String) Bool
 bCast e = (/=) <$> evalArithm e <*> return 0 
 
-evalBool :: Expr -> StateT STable Maybe Bool
+evalBool :: Expr -> StateT STable (Either String) Bool
 evalBool  (C (BConstant  b)) = return b
 evalBool  (Not e)   = not <$> (evalBool e  `mplus` bCast e)
 evalBool (Or b b')  = (||) <$> (evalBool b  `mplus` bCast b) <*> (evalBool b  `mplus` bCast b')
 evalBool (And b b') = (&&) <$> (evalBool b  `mplus` bCast b) <*> (evalBool b  `mplus` bCast b')
-evalBool (EQ a b)   = hoist generalize $ (==) <$> eval' a <*>  eval' b
-evalBool (NEQ a b)  = hoist generalize $ (/=) <$> eval' a <*>  eval' b
+evalBool (EQ a b)   = (==) <$> eval' a <*>  eval' b
+evalBool (NEQ a b)  = (/=) <$> eval' a <*>  eval' b
 evalBool (LT a b)   = (<)  <$> evalArithm a <*> evalArithm b
 evalBool (GT a b)   = (>)  <$> evalArithm a <*> evalArithm b
 evalBool (LE a b)   = (<=) <$> evalArithm a <*> evalArithm b
 evalBool (GE a b)   = (>=) <$> evalArithm a <*> evalArithm b
 evalBool v@(Var _)  = do 
-    (C (BConstant n)) <- queryVal v  
-    return  n
-evalBool _ = lift Nothing 
+    e' <- queryVal v  
+    case e' of
+        (C (BConstant b))  -> return b
+        e                    -> lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo booleano o casteable a booleano")
+evalBool f@(FApp vName _) = do
+    e' <- evalFApp f
+    case e' of
+        (C (BConstant b))  -> return b
+        e                    -> lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo booleano o casteable a booleano")
+evalBool e          = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo booleano o casteable a booleano")
 
-evalLazy :: Expr -> StateT STable Maybe Expr
+evalLazy :: Expr -> StateT STable (Either String) Expr
 evalLazy (Lazy e)      = return e
 evalLazy v@(Var vName) = do
     isState <- (! v) . getTable <$> get
     case lType isState of
-        LLazy _ -> getRValue v <$> get
-        _       -> lift Nothing 
-evalLazy   _      = lift Nothing 
+        LLazy _ -> lift . getRValue v =<< get
+        _       -> lift (Left $ "La expresion asociada a: '" ++ vName ++"' NO es de tipo Lazy.")
+evalLazy f@(FApp vName _) = do
+    e' <- evalFApp f
+    case e' of
+        (Lazy e)  -> return e
+        e         -> lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo lazy")
+evalLazy   e      = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo lazy")
 
 
-evalFApp :: Expr -> StateT STable Maybe Expr
+evalFApp :: Expr -> StateT STable (Either String) Expr
 evalFApp (FApp fName args) = do
     st@STable{getTable=t} <- get
     let
@@ -312,14 +335,14 @@ evalFApp (FApp fName args) = do
         t'              = foldr (uncurry Map.insert) t (serializeNames `zip` serializeArgs )
         fromRight (Right a) = a
 
-    return $ f STable{getTable=t'} 
+    lift $ f STable{getTable=t'} 
     
-evalFApp _                  = lift Nothing 
+evalFApp e              = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo funcion")
 
 
 
-getArgList :: String -> Int -> STable -> [Expr]
-getArgList fName nArgs st@STable{getTable=t} =  ($ st) . getRValue  <$> argsNames
+getArgList :: String -> Int -> STable -> Either String [Expr]
+getArgList fName nArgs st@STable{getTable=t} = sequence $ ($ st) . getRValue  <$> argsNames
     where
         argsNames = [ Var $ fName ++ "@" ++ show n | n <- [1..nArgs]]
 
@@ -332,11 +355,12 @@ getLazyArgList fName nArgs st@STable{getTable=t} =  cValue . (t !)  <$> argsName
 dummyPlus :: Int -> Int -> Int -> Int
 dummyPlus a b c = a + b + c
 
-dummyPlus' :: STable -> Expr 
-dummyPlus' st = mkIC (dummyPlus arg1 arg2 arg3)
-    where
-        prod =  traverse evalArithm  $ getArgList "dummyPlus" 3 st
-        Just [arg1,arg2,arg3] = evalStateT prod st
+dummyPlus' :: STable -> Either String Expr 
+dummyPlus' st = case  traverse evalArithm  <$> getArgList "dummyPlus" 3 st of
+    Left errMsg -> Left errMsg
+    Right exprs -> 
+        let Right [arg1,arg2,arg3] = evalStateT exprs st 
+        in  Right $ mkIC (dummyPlus arg1 arg2 arg3)
 
 
 
@@ -394,12 +418,13 @@ initialST = STable{getTable=t}
             { lType  = undefined 
             , lValue = v4
             , cValue = undefined 
-            , rValue = dummyPlus' <$> get
+            , rValue = get >>= (lift . dummyPlus')
             }
         
         t = Map.fromList [(v1,d1),(v2,d2),(v3,d3),(v4,d4)]
     
-test1,test2,test3,test4,test5,test6,test7 :: State STable Expr
+
+test1,test2,test3,test4,test5,test6,test7 :: StateT STable (Either String) Expr
 test1 = eval' exp1
 test2 = eval' exp2
 test3 = eval' exp3
