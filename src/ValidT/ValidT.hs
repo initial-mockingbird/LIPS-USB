@@ -19,13 +19,24 @@ import           Prelude          hiding (EQ, GT, LT)
 import Control.Monad.Morph
 import Data.Functor.Identity ( Identity(Identity) ) 
 
-validate :: S -> STable -> Either String LipsT
+-- | This function return de type of an action or a expression
+-- | If the expression isn't valid will return a string with the
+-- | error message
+validate 
+    :: S        -- ^ The action or expresion
+    -> STable   -- ^ The table of symbols (where are saved the current variables)
+    -> Either String LipsT -- ^ return (errorMessage or Type of the expression)
 validate node tabla 
     | sisAction node = validateAction (sTakeAction node) tabla
     | otherwise = validateExp (sTakeExpr node) tabla
 
-validateAction :: Action -> STable -> Either String LipsT
+-- This function validate an action (declaration of assignament)
+validateAction 
+    :: Action  -- ^ Action to be validated
+    -> STable  -- ^ Table of symbols (where are saved the current variables)
+    -> Either String LipsT -- ^ ( errorMessage or type of the action )
 validateAction node tabla 
+    -- In a declaration the types should be tha same
     | aisDeclaration node = do 
         let (tipo1,name,exp) = takeDeclaration node
         tipoExp <- validateExp exp tabla
@@ -34,6 +45,7 @@ validateAction node tabla
             return tipo1
         else
             Left ("Declaracion invalida de "++name++" | la expresion a la derecha es de tipo "++show(tipoExp) ++ " y la variable debe ser "++show(tipo1) )
+    -- In an assignament the type of the expression should be the same as the variable
     | aisAssignment node = do 
         let (name,exp) = takeAssignment node 
         tipo1 <- lookupType name tabla
@@ -45,7 +57,11 @@ validateAction node tabla
             Left ("Declaracion invalida de "++name++" | Declarada como "++show(tipo1) ++ " pero estas asignando " ++ show(tipoExp) )
     | otherwise = Left "A validate no se le puede pasar una secuencia de acciones"
 
-validateExp :: Expr -> STable -> Either String LipsT
+-- This function validate an expression
+validateExp 
+    :: Expr     -- ^ Expression to be validated
+    -> STable   -- ^ Table of symbols (where are saved the current variables)
+    -> Either String LipsT -- ^ ( errorMessage or type of the expression )
 validateExp node tabla
     -- Base cases
     | exprIsC node = Right $ takeTypeC node
@@ -97,31 +113,6 @@ compareT :: LipsT -> LipsT -> Bool
 compareT Any _ = True
 compareT _ Any = True
 compareT a b   = a == b
-
-{-
-getFunc "irandom" = Right (LInt,[LInt])
-getFunc "fibo" = Right (LInt,[LInt])
-getFunc "gcd" = Right (LInt,[LInt,LInt])
-getFunc "now" = Right (LInt,[])
-getFunc name = Left ("No existe la funcion "++name)
--}
-var =  C ( NumConstant 2 ) 
-myVar =  C ( BConstant True ) 
-tablaVacia = Map.empty
-mainValidate = do
-    myAST <- parse "3 || 1 + 2"
-    let miTabla = setIdentifier "var" var LInt (STable tablaVacia)
-    let miTabla2 = setIdentifier "myVar" myVar LBool miTabla
-    return $ validate myAST miTabla2
-
-
-
-
-
-
-
-
-
 
 
 --------------------------------
