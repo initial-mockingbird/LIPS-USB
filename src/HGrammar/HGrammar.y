@@ -20,7 +20,7 @@ import Prelude hiding (EQ,LT,GT)
 %token
     true  { TkTrue      }
     false { TkFalse     }
-    mod   { TkMod       }
+    '%'   { TkMod       }
     lazy  { TkLazy      }
     int   { TkInt       }
     bool  { TkBool      }
@@ -103,6 +103,7 @@ Expr
     | Expr '>=' Expr            { GE    $1 $3 }
     | Expr '||' Expr            { Or    $1 $3 }
     | Expr '&&' Expr            { And   $1 $3 }
+    | Expr '%'  Expr            { Mod   $1 $3 }
     | TkId                      { Var   $1    }
     | type                      { Var "type"  }
     | if                        { Var "if"    }
