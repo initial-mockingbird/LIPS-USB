@@ -288,9 +288,9 @@ bCast e = (/=) <$> evalArithm e <*> return 0
 
 evalBool :: Expr -> StateT STable (Either String) Bool
 evalBool  (C (BConstant  b)) = return b
-evalBool  (Not e)   = not <$> (evalBool e  `mplus` bCast e)
-evalBool (Or b b')  = (||) <$> (evalBool b  `mplus` bCast b) <*> (evalBool b  `mplus` bCast b')
-evalBool (And b b') = (&&) <$> (evalBool b  `mplus` bCast b) <*> (evalBool b  `mplus` bCast b')
+evalBool  (Not e)   = not <$>  (evalBool e  `mplus` bCast e)
+evalBool (Or b b')  = (||) <$> (evalBool b  `mplus` bCast b) <*> (evalBool b'  `mplus` bCast b')
+evalBool (And b b') = (&&) <$> (evalBool b  `mplus` bCast b) <*> (evalBool b'  `mplus` bCast b')
 evalBool (EQ a b)   = (==) <$> eval' a <*>  eval' b
 evalBool (NEQ a b)  = (/=) <$> eval' a <*>  eval' b
 evalBool (LT a b)   = (<)  <$> evalArithm a <*> evalArithm b
