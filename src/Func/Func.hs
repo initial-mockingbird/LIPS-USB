@@ -69,9 +69,13 @@ type' (Var "type")   _ =  EString "type"
 type' (Var "ltype")  _ =  EString "type"
 type' (Var "if")     _ =  EString "any"
 type' (Var "cvalue") _ =  EString "any"
-type' e              st = EString  . show . fromRight $ validate (E e) st
-    where
-        fromRight (Right a) = a 
+type' (Lazy e)       st = EString  . show . fromRight $ validate (E e) st
+type' e              st = case validate (E e) st of
+    Right (LLazy e) -> EString  . show $ e
+    Right e         -> EString  . show $ e
+    Left _          -> error "Impossible case"
+
+fromRight (Right a) = a     
 
 type'' :: STable  -> Expr 
 type'' st = type' arg1 st 
