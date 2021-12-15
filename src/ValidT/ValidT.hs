@@ -54,8 +54,8 @@ validateAction node tabla
         if tipo1 `compareT` tipoExp then
             return tipo1
         else
-            Left ("Declaracion invalida de "++name++" | Declarada como "++show(tipo1) ++ " pero estas asignando " ++ show(tipoExp) )
-    | otherwise = Left "A validate no se le puede pasar una secuencia de acciones"
+            Left ("Error: Declaracion invalida de "++name++" | Declarada como "++show(tipo1) ++ " pero estas asignando " ++ show(tipoExp) )
+    | otherwise = Left "Error: A validate no se le puede pasar una secuencia de acciones"
 
 -- This function validate an expression
 validateExp 
@@ -95,9 +95,9 @@ validateExp node tabla
         if tipo1 `compareT` tipo2 then
             return (getTypeBinaryExpr node)
         else if not (tipo1 `compareT` tipo2) then 
-            Left ("Tipos no coinciden " ++ show(ex1) ++" es de tipo = "++show(tipo1) ++ " mientras que "++show(ex2) ++" es de tipo "++show(tipo2))
+            Left ("Error: Tipos no coinciden " ++ show(ex1) ++" es de tipo = "++show(tipo1) ++ " mientras que "++show(ex2) ++" es de tipo "++show(tipo2))
         else
-            Left ("No se puede aplicar el simbolo "++show(node) ++ " con "++ show(tipo1))
+            Left ("Error: No se puede aplicar el simbolo "++show(node) ++ " con "++ show(tipo1))
     | exprIsSeqE node = Left "La funcion validate no puede contener una secuencia de acciones/expresiones"
     | otherwise = Left "Error tipo de expresion no reconocido"
 
