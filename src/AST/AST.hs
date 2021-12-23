@@ -366,31 +366,3 @@ exprIsFApp _ = False
 
 takeFApp :: Expr -> (String,[Expr])
 takeFApp (FApp name lista) = (name,lista)
-{-
--- | Expression tree
-data Expr
-    = Negate Expr
-    | Pos    Expr
-    | Not    Expr
-    | Plus   Expr Expr
-    | Minus  Expr Expr
-    | Mod    Expr Expr
-    | Times  Expr Expr
-    | Pow    Expr Expr
-    | EQ     Expr Expr
-    | NEQ    Expr Expr
-    | LT     Expr Expr
-    | GT     Expr Expr
-    | LE     Expr Expr
-    | GE     Expr Expr
-    | Or     Expr Expr
-    | And    Expr Expr
-    | C      (Constant Int)
-    | Var    String
-    | FApp   String [Expr]
-    | Lazy   Expr
-    | SeqE   Expr S
-
-data LipsT = LInt | LBool | LLazy LipsT
-
--}
