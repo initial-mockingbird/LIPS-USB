@@ -66,8 +66,8 @@ import Prelude hiding (EQ,LT,GT)
 S 
     : Expr                      { E   $1 }
     | Action                    { A   $1 }
-    | Expr    ';' S             { E (SeqE $1 $3)}
-    | Action  ';' S             { A (SeqA $1 $3)}
+    | Expr    ';' S             { Seq (E $1) $3 }
+    | Action  ';' S             { Seq (A $1) $3 }
     | Action  ';' {-empty-}     { A $1 }
     | Expr    ';' {-empty-}     { E $1 }
 

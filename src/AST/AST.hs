@@ -21,7 +21,7 @@ import           Prelude          hiding (EQ, GT, LT)
 ------------------------------
 
 -- | AST tree
-data S = A Action | E Expr deriving (Eq,Ord)
+data S = A Action | E Expr | Seq S S  deriving (Eq,Ord)
 
 -- | Expression tree
 data Expr
@@ -129,6 +129,7 @@ regenerateAction _                       = undefined
 regenerateS :: S -> String
 regenerateS (A a) = regenerateAction a
 regenerateS (E e) = regenerateExpr e
+regenerateS (Seq a b) = regenerateS a ++ "; " ++ regenerateS b
 
 -- | Helper type to pretty print things
 newtype TS = T (Tree String)
@@ -164,11 +165,14 @@ instance Show Expr where
 instance Show S where
     show (A action) = show action
     show (E expr)   = show expr
+    show (Seq a b)  = show a ++ "; " ++ show b
 
 -- | Transforms the implicit tree into a Tree type (so we can prettyPrint it using the library!)
 sToTree :: S -> Tree String
 sToTree (E expr)   = exprToTree expr
 sToTree (A action) = actionToTree action
+sToTree (Seq a b)  = Node {rootLabel= ";", subForest=[sToTree a,sToTree b]}
+
 
 -- | Transforms the Action tree into a Tree type
 actionToTree :: Action -> Tree String

@@ -17,13 +17,13 @@ import           Text.Parsec            (ParsecT, SourcePos, anyToken, between,
                                          incSourceColumn, many, notFollowedBy,
                                          runParserT, sepBy, setPosition,
                                          setSourceColumn, tokenPrim, (<?>),
-                                         (<|>), getInput)
+                                         (<|>), getInput, sepEndBy1)
 import           Text.Parsec.Combinator (anyToken, between, eof, notFollowedBy,
                                          sepBy)
 
 import           AST.AST                (Action (Assignment, Declaration),
                                          Constant (BConstant, NumConstant),
-                                         Expr (And, C, EQ, FApp, GE, GT, LE, LT, Lazy, Minus, NEQ, Negate, Not, Or, Plus, Pos, Pow, Times, Var),
+                                         Expr (..),
                                          LipsT (..), S (..), toPrettyS)
 import qualified Control.Applicative    as A (optional)
 import           Control.Monad.IO.Class (MonadIO (liftIO))
@@ -203,7 +203,13 @@ pArgs = sepBy pExpr pComma
 
 -- | Parses an AST
 pAST :: SP m S
-pAST = (E <$> pExpr <* (eof <?> "Parse error: Malformed Expression")) <|> (A <$> pAction)
+pAST = foldl1 Seq <$> sepEndBy1 pAST' pSColon
+
+-- | Parses an AST
+pAST' :: SP m S
+pAST' = (E <$> pExpr <* (eof <?> "Parse error: Malformed Expression")) <|> (A <$> pAction)
+
+
 
 -- | Parses an expression, validating the non-assocs operators
 pExpr :: SP m Expr
@@ -276,10 +282,15 @@ pP6 = g <$> A.optional (many uOP) <*> (toETree <$> pP7 <*> many ((,) <$> p6Ops <
 
 -- | Parses a precedence 7 expression
 pP7 :: SP m Expr
-pP7 =  pParenE <|> pQuoteE <|> isNum <|> isBool <|> isIf' <|> isType' <|> isIdOrFapp <|> (getInput >>= \s -> fail $ "Parse error, unexpected character: " ++ show (PT $ head s)) 
+pP7 =  pParenE <|> pQuoteE <|> isNum <|> isBool <|> isIf' <|> isType' <|> isIdOrFapp <|> customErrorParse
     where
         pParenE = between pOP    (pCP    <?> "Non closing parenthesis Found") pExpr
         pQuoteE = between pQuote (pQuote <?> "Non closing Quote found Found") ( Lazy <$> pExpr)
+        customErrorParse = do
+            s <- getInput 
+            if null s 
+                then fail "Parse error: Expecting argument or operand"
+                else fail $ "Parse error, unexpected character: " ++ show (PT $ head s)
 
 ----------------------------------
 -- Aux Functions for Expressions:
@@ -311,6 +322,7 @@ nonAssocCheck e                  = pure e
 toETree :: Expr -> [(Token, Expr)] -> Expr
 toETree e []               = e
 toETree e ((TkPlus,t):ts)  = toETree (Plus e t) ts
+toETree e ((TkMod,t):ts)   = toETree (Mod e t) ts
 toETree e ((TkMinus,t):ts) = toETree (Minus e t) ts
 toETree e ((TkMult,t):ts)  = toETree (Times e t) ts
 toETree e ((TkPower,t):ts) = Pow e (toETree t ts )
@@ -342,7 +354,7 @@ pLType = (isBoolT <|> isIntT <|> isLazyT <*> pLType) <?> "Bad type initializator
 
 -- | Parses an assignment
 pAssignment :: SP m Action
-pAssignment = f <$> (isId <?> "Parse error: Can only assign identifiers") <*> ((,) <$> (pAssign <?> "Bad assing symbol") <*> pExpr <* (eof <?> "Parse error: possible unmatched parenthesis/quotation" ))
+pAssignment = f <$> (isId <?> "Parse error: Can only assign identifiers") <*> ((,) <$> (pAssign <?> "Bad assing symbol") <*> pExpr )
     where
         f :: Expr -> (Token, Expr) -> Action
         f (Var v) (TkAssign, e ) = Assignment v e

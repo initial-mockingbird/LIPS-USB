@@ -29,6 +29,7 @@ library
       Func.Func
       HGrammar.HGrammar
       Lexer.Lexer
+      Lexer.PLexer
       Lib
       Parser.Parser
       Parser.Tokens
