@@ -350,7 +350,8 @@ parseLoad = do
 -- | A parse for the code is (temporarily) just an error.
 parseCode :: StateParser ()
 parseCode = do
-    input <- getInput 
+    input <- manyTill anyChar (try (void endOfLine) <|> eof ) --getInput 
+    when (null input) (fail "")
     f     <- getCurrentFile
     pos   <- getPosition 
     environment <- getCurrentEnv
