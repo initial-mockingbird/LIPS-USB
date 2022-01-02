@@ -13,6 +13,7 @@ import AST.AST
 import Data.Maybe
 import Data.Either
 import HGrammar.HGrammar
+import Lexer.Lexer
 import Data.Map (Map, (!))
 import qualified Data.Map as Map
 import Control.Monad.State.Strict
@@ -42,7 +43,7 @@ validateAction node tabla
         let (tipo1,name,exp) = takeDeclaration node
         tipoExp <- validateExp exp tabla
 
-        if tipo1 `compareT` tipoExp then
+        if containedT tipoExp tipo1 then
             return tipo1
         else
             Left ("Declaracion invalida de "++name++" | la expresion a la derecha es de tipo "++show(tipoExp) ++ " y la variable debe ser "++show(tipo1) )
@@ -52,7 +53,7 @@ validateAction node tabla
         tipo1 <- lookupType name tabla
         tipoExp <- validateExp exp tabla
 
-        if tipo1 `compareT` tipoExp then
+        if containedT tipoExp tipo1 then
             return tipo1
         else
             Left ("Error: Declaracion invalida de "++name++" | Declarada como "++show(tipo1) ++ " pero estas asignando " ++ show(tipoExp) )
@@ -93,12 +94,15 @@ validateExp node tabla
         let (ex1,ex2) = takeFromBinaryExpr node 
         tipo1 <- validateExp ex1 tabla
         tipo2 <- validateExp ex2 tabla
-        if tipo1 `compareT` tipo2 then
-            return (getTypeBinaryExpr node)
-        else if not (tipo1 `compareT` tipo2) then 
-            Left ("Error: Tipos no coinciden " ++ show(ex1) ++" es de tipo = "++show(tipo1) ++ " mientras que "++show(ex2) ++" es de tipo "++show(tipo2))
+        -- return (getTypeBinaryExpr node)
+        if containedT tipo1 tipo2 then 
+            -- Se tranforma el tipo al del operador
+            return ( transformT tipo2 (getTypeBinaryExpr node) )
+        else if containedT tipo2 tipo1 then 
+            -- Se tranforma el tipo al del operador
+            return ( transformT tipo1 (getTypeBinaryExpr node) )
         else
-            Left ("Error: No se puede aplicar el simbolo "++show(node) ++ " con "++ show(tipo1))
+            Left ("Error: No se pueden aplicar el simbolo"++show(node)++" a estos tipos " ++ show(ex1) ++" es de tipo = "++show(tipo1) ++ " mientras que "++show(ex2) ++" es de tipo "++show(tipo2))
     | exprIsSeqE node = Left "La funcion validate no puede contener una secuencia de acciones/expresiones"
     | otherwise = Left "Error tipo de expresion no reconocido"
 
@@ -115,6 +119,30 @@ compareT Any _ = True
 compareT _ Any = True
 compareT a b   = a == b
 
+-- Grafo Inverso de contencion
+-- Es decir, Float c Int
+nextType :: LipsT -> LipsT
+nextType LInt = LBool
+nextType LFloat = LInt
+nextType (LLazy tipo) = tipo
+nextType var = var 
+
+-- containedT x y | te dice si 'x' esta contenido en 'y'
+containedT :: LipsT -> LipsT -> Bool
+containedT t1 t2
+    | t1 == t2 = True
+    | t2 == nextType t2 = False
+    | otherwise = containedT t1 (nextType t2)
+
+transformT :: LipsT -> LipsT -> LipsT
+transformT (LLazy tipo) final = LLazy $ transformT tipo final
+transformT x y = y 
+
+{-
+mainValidate = do
+    temp <- parse "lazy bool z := 1 = 2"
+    return $ validate temp initialST
+-}
 
 --------------------------------
 

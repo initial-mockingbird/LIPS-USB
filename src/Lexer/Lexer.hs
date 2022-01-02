@@ -52,6 +52,8 @@ data Token
     | TkBool         -- ^ @ bool @
     | TkType         -- ^ @ type @
     | TkLazy         -- ^ @ lazy @
+    | TkString       -- ^ @ string @
+    | TkFloat        -- ^ @ float @
     deriving (Eq,Show)
 
 newtype PrettyToken = PT Token 
@@ -98,6 +100,8 @@ instance Show PrettyToken where
     show (PT TkBool)         = "bool"
     show (PT TkType)         = "type"
     show (PT TkLazy)         = "lazy"
+    show (PT TkString)       = "string"
+    show (PT TkFloat)        = "float"
 
 
 -- | Auxiliary type, will provide a "logged" version of Either
@@ -133,8 +137,8 @@ tkSim = [ TkQuote, TkComma, TkAssign, TkSemicolon, TkYields, TkRArrow, TkLArrow,
 
 -- | Reserverd words of LIPS-USB language
 reservedWord :: [[Char]]
-reservedWord = [ "int", "bool", "type", "false", "true", "lazy", "while","if" ]
-tkReservedWord = [TkInt, TkBool, TkType, TkFalse, TkTrue, TkLazy, TkWhile, TkIf]
+reservedWord = [ "int", "bool", "type", "false", "true", "lazy", "while","if", "string", "float" ]
+tkReservedWord = [TkInt, TkBool, TkType, TkFalse, TkTrue, TkLazy, TkWhile, TkIf, TkString, TkFloat]
 
 -- | Special characters = Opertaros U Symbols
 spe :: [[Char]]
@@ -226,10 +230,10 @@ checkOverflow xs = case xs of
         lxs   = length xs
 
 
--- | Convert a String to ( Token or Error )
+-- | Convert a String to ( list Tokens or Error )
 manyToken 
     :: String                         -- ^ Inicial String 
-    -> Either [(String,Int)] [Token]  -- ^ (Error,position) or token
+    -> Either [(String,Int)] [Token]  -- ^ (Error,position) or list tokens
 manyToken xs = unwrapL $ traverse ( f . tokenizer) $ cols ( split [] xs )
     where
         f (Left x)  = L $ Left [x]

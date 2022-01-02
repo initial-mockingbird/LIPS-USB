@@ -63,7 +63,7 @@ data Constant n
     deriving (Eq,Ord)
 
 -- | Lips types
-data LipsT = LInt | LBool | LLazy LipsT | Type | Void  | Any | ConstantT LipsT | Fun [LipsT] LipsT deriving (Eq,Ord)
+data LipsT = LInt | LBool | LFloat | LLazy LipsT | Type | Void  | Any | ConstantT LipsT | Fun [LipsT] LipsT deriving (Eq,Ord)
 
 -- si el hijo tiene menor precedencia, agrupelo con parentesis.
 getPrec :: Expr -> Int
