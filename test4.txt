@@ -1,0 +1,4 @@
+.ast false && false
+.ast false && true
+.ast true && false
+.ast true && true
