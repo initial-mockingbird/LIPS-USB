@@ -160,6 +160,12 @@ isId (fc:r) = (fc `elem` firstChar) && all (`elem` rest) r
         firstChar = ['A'..'Z'] ++ ['a'..'z'] ++ "_"
         rest      = firstChar ++ ['0'..'9']
 
+-- | Boolean functions to know if a string hace an alphabetic character
+haveAlpha :: String -> Bool
+haveAlpha [xs] = xs `elem` ['A'..'Z'] ++ ['a'..'z'] ++ "_"
+haveAlpha (xs:x)
+    | xs `elem` ['A'..'Z'] ++ ['a'..'z'] ++ "_" = True 
+    | otherwise = haveAlpha x
 {- 
 Function that take a string and converts it to a list of string 
 where each element of the list belong to spe (special symbol) or it's
@@ -217,7 +223,12 @@ tokenizer (x,col)
         else Left ("ERROR: lexer(" ++ show x ++ ") ==> Integer overflow/underflow",col)
     -- It's variable identifier
     | isId x                = Right $ TkId x
-    | otherwise             = Left ("ERROR: lexer(" ++ show x ++ ") ==> Inicializador de identificador invalido",col)
+    | not (haveAlpha x)
+        = Left ("ERROR: lexer(" ++ show x ++ ") ==> Operador no reconocido en LIPS",col)
+    | isDigit (head x)
+        = Left ("ERROR: lexer(" ++ show x ++ ") ==> Las variables no pueden comenzar con numeros",col)
+    | otherwise
+        = Left ("ERROR: lexer(" ++ show x ++ ") ==> Las variables solo pueden contener caracteres alfanumericos o underscore",col)
 
 -- | Checks for over/underflow.
 checkOverflow :: String -> Bool
