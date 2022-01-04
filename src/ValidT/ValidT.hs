@@ -21,6 +21,8 @@ import           Prelude          hiding (EQ, GT, LT)
 import Control.Monad.Morph
 import Data.Functor.Identity ( Identity(Identity) ) 
 import qualified PParser.PParser as PP
+import Debug.Trace
+
 -- | This function return de type of an action or a expression
 -- | If the expression isn't valid will return a string with the
 -- | error message
@@ -171,7 +173,6 @@ updateST (A (Declaration t vName e)) = do
     e' <- eval' e 
     let vState = IdState t (Var vName) e (eval' e')
     addIdState (Var vName) vState const 
-        
 updateST (A (Assignment vName expr)) = do 
     t <- (! Var vName) . getTable <$> get
     e' <- eval' expr
@@ -181,10 +182,9 @@ updateST (A (Assignment vName expr)) = do
         , rValue = eval' e'
         }
     addIdState (Var vName) newState const 
-    
-updateST (A (SeqA a s)) = updateST (A a) >> updateST s
+updateST (A (SeqA a s)) = error "cannot happen"
 updateST (E _) = return ()
-updateST (Seq a b) = updateST a >> updateST b
+updateST (Seq a b) = error "cannot happen2"
 
 parse' s= case PP.parse' s of 
         Left (s,_) -> Left s
@@ -195,16 +195,18 @@ validate' s =  void <$> lift . validate s =<< get
     where
         void f = () <$ f
 
-process :: String -> StateT STable (Either String) String
+process :: String -> StateT STable (Either String) [String]
 process input = do
-    ast <-  lift $ parse' input
-    validate' ast
-    process' ast
+    let 
+        seqList (Seq a b) = seqList a ++ seqList b
+        seqList e         = [e]
+    ast <-   lift $ parse' input
+    traverse (\a -> validate' a >> process' a) $ seqList ast 
 
 process' :: S -> StateT STable (Either String) String
 process' ast@(A action) = updateST ast >>  (lift . Right) ("ACK: " ++ regenerateS ast)
 process' ast@(E expr)   = eval' expr >>= \resExpr ->  lift . Right $ "OK: " ++ regenerateS ast ++ " ==> " ++ regenerateExpr resExpr
-process' (Seq a b)      = process' a >> process' b
+
 
 
 lookupType' :: String -> Identifier -> STable -> Either String LipsT

@@ -25,7 +25,7 @@ import           Text.Parsec            (ParsecT, SourcePos, anyToken, between,
                                          incSourceColumn, many, notFollowedBy,
                                          runParserT, sepBy, setPosition,
                                          setSourceColumn, tokenPrim, (<?>),
-                                         (<|>), getInput, sepEndBy1)
+                                         (<|>), getInput, sepEndBy1, try)
 import           Text.Parsec.Combinator (anyToken, between, eof, notFollowedBy,
                                          sepBy)
 
@@ -225,7 +225,7 @@ pAST = foldl1 Seq <$> sepEndBy1 pAST' pSColon
 
 -- | Parses an AST
 pAST' :: SP m S
-pAST' = (E <$> pExpr ) <|> (A <$> pAction)
+pAST' = (A <$> pAction) <|> (E <$> pExpr )
 
 
 
@@ -237,7 +237,7 @@ pExpr = pP0 >>= nonAssocCheck
 
 -- | Parses an action
 pAction :: SP m Action
-pAction = pDeclaration <|> pAssignment
+pAction = try pDeclaration <|> try pAssignment
 
 
 ------------------------------
