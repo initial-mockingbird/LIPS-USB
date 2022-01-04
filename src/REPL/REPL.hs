@@ -361,7 +361,7 @@ parseCode = do
             liftIO $ putStrLn errorMsg
             putErr tError
         Right (sucessMsg,newEnv) -> do
-            liftIO $ putStrLn sucessMsg
+            liftIO $ putStrLns sucessMsg
             updateEnv newEnv
 
 
