@@ -10,7 +10,15 @@ Portability : POSIX
 -}
 
 
-import           Lexer.Lexer            (Token (TkAnd, TkAssign, TkBool, TkCloseBrace, TkClosePar, TkComma, TkEQ, TkFalse, TkGE, TkGT, TkId, TkIf, TkInt, TkLE, TkLT, TkLazy, TkMinus, TkMod, TkMult, TkNE, TkNot, TkNum, TkOpenBrace, TkOpenPar, TkOr, TkPlus, TkPower, TkQuote, TkSemicolon, TkTrue, TkType, TkWhile),
+{- |
+Module      : PParser
+Description : Provides a combinator based Parser
+Maintainer  : 15-11139@usb.ve, 16-10400@usb.ve 17-10538@usb.ve
+Stability   : experimental
+Portability : POSIX
+
+-}
+import           Lexer.Lexer            (Token (..),
                                          manyToken, PrettyToken(..))
 import           Text.Parsec            (ParsecT, SourcePos, anyToken, between,
                                          eof, errorPos, getPosition,
@@ -54,7 +62,7 @@ genSymbolParser tk = tokenPrim show g f
 pS, pM, pNot, pMult, pOP, pCP, pQuote                :: Monad m => ParsecT [Token] u m Token
 pMod, pLazy, pInt, pBool, pWhile, pIf, pType, pComma :: Monad m => ParsecT [Token] u m Token
 pSColon, pPower, pLE, pGE, pLT, pGT, pEQ, pNE, pOr   :: Monad m => ParsecT [Token] u m Token
-pAnd, pAssign, pOB, pCB                              :: Monad m => ParsecT [Token] u m Token
+pAnd, pAssign, pOB, pCB, pDQ                    :: Monad m => ParsecT [Token] u m Token
 -- pTrue, pFalse :: Monad m => ParsecT [Token] u m Token
 
 pS      = genSymbolParser TkPlus
@@ -69,6 +77,7 @@ pQuote  = genSymbolParser TkQuote
 pMod    = genSymbolParser TkMod
 pLazy   = genSymbolParser TkLazy
 pInt    = genSymbolParser TkInt
+pDQ     = genSymbolParser TkDQuote
 pBool   = genSymbolParser TkBool
 pWhile  = genSymbolParser TkWhile
 pIf     = genSymbolParser TkIf
@@ -139,6 +148,15 @@ isIntT = tokenPrim show g f
         f _     = Nothing
         g pos _  _    = incSourceColumn pos 1
 
+
+-- | Builds an expression parser for the String
+isStringT :: Monad m => ParsecT [Token] u m LipsT
+isStringT = tokenPrim show g f
+    where
+        f TkString  = Just LString
+        f _         = Nothing
+        g pos _  _  = incSourceColumn pos 1
+
 -- | Builds an expression parser for the bool type
 isBoolT :: Monad m => ParsecT [Token] u m LipsT
 isBoolT = tokenPrim show g f
@@ -207,13 +225,15 @@ pAST = foldl1 Seq <$> sepEndBy1 pAST' pSColon
 
 -- | Parses an AST
 pAST' :: SP m S
-pAST' = (E <$> pExpr <* (eof <?> "Parse error: Malformed Expression")) <|> (A <$> pAction)
+pAST' = (E <$> pExpr ) <|> (A <$> pAction)
 
 
 
 -- | Parses an expression, validating the non-assocs operators
 pExpr :: SP m Expr
 pExpr = pP0 >>= nonAssocCheck
+
+
 
 -- | Parses an action
 pAction :: SP m Action
@@ -286,6 +306,7 @@ pP7 =  pParenE <|> pQuoteE <|> isNum <|> isBool <|> isIf' <|> isType' <|> isIdOr
     where
         pParenE = between pOP    (pCP    <?> "Non closing parenthesis Found") pExpr
         pQuoteE = between pQuote (pQuote <?> "Non closing Quote found Found") ( Lazy <$> pExpr)
+        pDQE    = between pDQ    (pDQ    <?> "Non closing Double Quote found Found") pExpr
         customErrorParse = do
             s <- getInput 
             if null s 
@@ -350,7 +371,7 @@ pDeclaration = (f <$> pLType <*> pAssignment) <?> "Bad Declaration, format shoul
 
 -- | Parses a lips type.
 pLType :: SP m LipsT
-pLType = (isBoolT <|> isIntT <|> isLazyT <*> pLType) <?> "Bad type initializator."
+pLType = (isBoolT <|> isIntT <|> isStringT <|> isLazyT <*> pLType) <?> "Bad type initializator."
 
 -- | Parses an assignment
 pAssignment :: SP m Action
@@ -364,6 +385,7 @@ pAssignment = f <$> (isId <?> "Parse error: Can only assign identifiers") <*> ((
 -- Testing and Results
 ------------------------------
 
+{-
 -- | Inner testing function.
 parse' :: String -> String
 parse' s = case manyToken s of
@@ -371,7 +393,15 @@ parse' s = case manyToken s of
     Right tks -> case runParserT pAST () "" tks of
         Identity  (Left e)    -> show e
         Identity (Right expr) -> toPrettyS expr
+-}
 
+
+parse' :: String -> Either (String,Int) S
+parse' s = case manyToken s of
+    Left err -> Left . last $ err
+    Right tks -> case runParserT pAST () "" tks of
+        Identity  (Left e)    -> Left (show e,-1)
+        Identity (Right expr) -> Right expr
 
 -- | The parser function!
 parse ::  Monad m => String -> ParsecT String u m (Either (String,SourcePos) S)
