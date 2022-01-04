@@ -63,7 +63,7 @@ data Constant n
     deriving (Eq,Ord)
 
 -- | Lips types
-data LipsT = LInt | LBool | LFloat | LLazy LipsT | Type | Void  | Any | ConstantT LipsT | Fun [LipsT] LipsT deriving (Eq,Ord)
+data LipsT = LInt | LBool | LString | LFloat | LLazy LipsT | Type | Void  | Any | ConstantT LipsT | Fun [LipsT] LipsT deriving (Eq,Ord)
 
 -- si el hijo tiene menor precedencia, agrupelo con parentesis.
 getPrec :: Expr -> Int
@@ -127,9 +127,9 @@ regenerateAction (Assignment  vName e)   = vName ++ " := " ++ regenerateExpr e
 regenerateAction _                       = undefined 
 
 regenerateS :: S -> String
-regenerateS (A a) = regenerateAction a
-regenerateS (E e) = regenerateExpr e
-regenerateS (Seq a b) = regenerateS a ++ "; " ++ regenerateS b
+regenerateS (A a) = regenerateAction a ++ ";"
+regenerateS (E e) = regenerateExpr e ++ ";"
+regenerateS (Seq a b) = regenerateS a ++ "; " ++ regenerateS b ++ ";"
 
 -- | Helper type to pretty print things
 newtype TS = T (Tree String)
@@ -147,7 +147,6 @@ instance Show LipsT where
     show Any       = "Any"
     show (ConstantT t) = "Constant " ++ show t
     show (Fun ts t) = "fun(" ++ intercalate "," [show t' | t' <- ts] ++ ") -> " ++ show t
-
 
 -- Since we have already a tree of strings that represents
 -- we might as well defined the desired showAST as an pre-order
@@ -225,7 +224,7 @@ prettyPrintS = putStrLn . toPrettyS
 
 -- | showAST is just the show instance, which is the pre-order traversal of the tree.
 showAST :: S -> String
-showAST = show
+showAST = (++";")  . show
 
 ------------------------------
 -- Tobe functions

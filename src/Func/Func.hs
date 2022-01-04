@@ -55,7 +55,7 @@ iST = STable{getTable=t}
 
 
 if' :: STable -> Expr -> Expr -> Expr -> Either String Expr
-if' st b e e' = case evalStateT (evalBool b) st of
+if' st b e e' = case evalStateT (evalBool True b) st of
     Right b' -> if b' then evalStateT (eval' e) st else evalStateT (eval' e') st
     Left e   -> Left e
 
@@ -69,9 +69,7 @@ type' (Var "type")   _ =  EString "type"
 type' (Var "ltype")  _ =  EString "type"
 type' (Var "if")     _ =  EString "any"
 type' (Var "cvalue") _ =  EString "any"
-type' (Lazy e)       st = EString  . show . fromRight $ validate (E e) st
 type' e              st = case validate (E e) st of
-    Right (LLazy e) -> EString  . show $ e
     Right e         -> EString  . show $ e
     Left _          -> error "Impossible case"
 
@@ -115,7 +113,7 @@ irandom n
 
 
 irandom' :: STable -> Either String Int
-irandom' st = case  traverse evalArithm  <$> getArgList "irandom" 1 st of
+irandom' st = case  traverse (evalArithm True)  <$> getArgList "irandom" 1 st of
     Left errMsg -> Left errMsg
     Right exprs -> 
         let Right [arg1] = evalStateT exprs st 
@@ -129,7 +127,7 @@ fibo n = fib !! n
         fib = 0 : 1 : [a + b | (a, b) <- zip fib (tail fib)]
 
 fibo' :: STable -> Either String Expr
-fibo' st =  case  traverse evalArithm  <$> getArgList "fibo" 1 st of
+fibo' st =  case  traverse (evalArithm True)  <$> getArgList "fibo" 1 st of
     Left errMsg -> Left errMsg
     Right exprs -> 
         let Right [arg1] = evalStateT exprs st 
@@ -137,7 +135,7 @@ fibo' st =  case  traverse evalArithm  <$> getArgList "fibo" 1 st of
 
 
 gcd' :: STable -> Either String Expr
-gcd' st = case  traverse evalArithm  <$> getArgList "gcd" 2 st of
+gcd' st = case  traverse (evalArithm True)  <$> getArgList "gcd" 2 st of
     Left errMsg -> Left errMsg
     Right exprs -> 
         let Right [arg1,arg2] = evalStateT exprs st 

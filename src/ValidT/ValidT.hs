@@ -20,7 +20,7 @@ import Control.Monad.State.Strict
 import           Prelude          hiding (EQ, GT, LT)
 import Control.Monad.Morph
 import Data.Functor.Identity ( Identity(Identity) ) 
-
+import qualified PParser.PParser as PP
 -- | This function return de type of an action or a expression
 -- | If the expression isn't valid will return a string with the
 -- | error message
@@ -169,7 +169,7 @@ addIdState e eID f = modify $ STable . Map.insertWith f e eID . getTable
 updateST :: S -> StateT STable (Either String) ()
 updateST (A (Declaration t vName e)) = do 
     e' <- eval' e 
-    let vState = IdState t (Var vName) e' (eval' e')
+    let vState = IdState t (Var vName) e (eval' e')
     addIdState (Var vName) vState const 
         
 updateST (A (Assignment vName expr)) = do 
@@ -177,15 +177,16 @@ updateST (A (Assignment vName expr)) = do
     e' <- eval' expr
     let newState = IdState { lType  = lType t
         , lValue = lValue t
-        , cValue = e'
+        , cValue = expr
         , rValue = eval' e'
         }
     addIdState (Var vName) newState const 
     
 updateST (A (SeqA a s)) = updateST (A a) >> updateST s
 updateST (E _) = return ()
+updateST (Seq a b) = updateST a >> updateST b
 
-parse' s= case parse s of 
+parse' s= case PP.parse' s of 
         Left (s,_) -> Left s
         Right a    -> Right a
 
@@ -198,13 +199,12 @@ process :: String -> StateT STable (Either String) String
 process input = do
     ast <-  lift $ parse' input
     validate' ast
-    case ast of
-        (A action) -> do
-            updateST ast
-            lift . Right $ "ACK: " ++ regenerateS ast
-        (E expr) -> do
-            resExpr <- eval' expr
-            lift . Right $ "OK: " ++ regenerateS ast ++ " ==> " ++ regenerateExpr resExpr
+    process' ast
+
+process' :: S -> StateT STable (Either String) String
+process' ast@(A action) = updateST ast >>  (lift . Right) ("ACK: " ++ regenerateS ast)
+process' ast@(E expr)   = eval' expr >>= \resExpr ->  lift . Right $ "OK: " ++ regenerateS ast ++ " ==> " ++ regenerateExpr resExpr
+process' (Seq a b)      = process' a >> process' b
 
 
 lookupType' :: String -> Identifier -> STable -> Either String LipsT
@@ -260,13 +260,15 @@ setIdentifier vName = setIdentifier' (Var vName)
 
 -- | Dummy eval
 eval' :: Expr -> StateT STable (Either String) Expr 
-eval' expr =  eL <+> eA <+> eB <+> eF 
+eval' expr = eB <+> eA <+> eBC <+> eAC <+> eL <+> eF 
     where
         (<+>) = mplus  
-        eA = mkIC <$> evalArithm expr 
-        eB = mkBC <$> evalBool expr
-        eL = evalLazy expr
-        eF = evalFApp expr
+        eA  = mkIC <$> evalArithm False expr 
+        eB  = mkBC <$> evalBool False expr
+        eAC = mkIC <$> evalArithm True expr 
+        eBC = mkBC <$> evalBool True expr
+        eL  = evalLazy expr
+        eF  = evalFApp expr
 
 eval :: S -> StateT STable (Either String) S
 eval (E e) = E <$> eval' e
@@ -281,66 +283,64 @@ queryVal :: Expr -> StateT STable (Either String) Expr
 queryVal e = rValue .  (! e) . getTable =<< get 
 
 
-evalArithm :: Expr -> StateT STable (Either String) Int
-evalArithm (C (NumConstant  n)) = return n
-evalArithm  (Negate e)  = (* (-1)) <$> evalArithm e
-evalArithm  (Pos e)     = evalArithm  e
-evalArithm  (Plus a b)  = (+) <$> evalArithm a <*> evalArithm b
-evalArithm  (Minus a b) = (-) <$> evalArithm a <*> evalArithm b
-evalArithm  (Mod a b)   = mod <$> evalArithm a <*> evalArithm b
-evalArithm  (Times a b) = (*) <$> evalArithm a <*> evalArithm b
-evalArithm  (Pow a b)   = (^) <$> evalArithm a <*> evalArithm b
-evalArithm v@(Var _)    = do 
-    e' <- queryVal v  
-    case e' of
-        (C (NumConstant n))  -> return n
-        e                    -> lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo aritmetico")
-evalArithm f@(FApp vName _) = do
-    e' <- evalFApp f
-    case e' of
-        (C (NumConstant n))  -> return n
-        e                    -> lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo aritmetico")
-evalArithm  e           = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo aritmetico")
+evalArithm :: Bool -> Expr -> StateT STable (Either String) Int
+evalArithm p (C (NumConstant  n)) = return n
+evalArithm True (C (BConstant b)) = if b then return 1 else return 0
+evalArithm p (Negate e)  = (* (-1)) <$> evalArithm p e
+evalArithm p (Pos e)     = evalArithm p  e
+evalArithm p (Plus a b)  = (+) <$> evalArithm p a <*> evalArithm p b
+evalArithm p (Minus a b) = (-) <$> evalArithm p a <*> evalArithm p b
+evalArithm p (Mod a b)   = mod <$> evalArithm p a <*> evalArithm p b
+evalArithm p (Times a b) = (*) <$> evalArithm p a <*> evalArithm p b
+evalArithm p (Pow a b)   = (^) <$> evalArithm p a <*> evalArithm p b
+evalArithm p v@(Var _)   = queryVal v  >>= evalArithm p
+evalArithm p f@(FApp vName _) = evalFApp f >>= evalArithm p
+evalArithm p  e          = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo aritmetico")
 
 
-bCast :: Expr -> StateT STable (Either String) Bool
-bCast e = (/=) <$> evalArithm e <*> return 0 
+bCast :: Bool -> Expr -> StateT STable (Either String) Bool
+bCast True e  = (/=) <$> evalArithm True e <*> return 0 
+bCast False _ = mzero 
 
-evalBool :: Expr -> StateT STable (Either String) Bool
-evalBool  (C (BConstant  b)) = return b
-evalBool  (Not e)   = not <$>  (evalBool e  `mplus` bCast e)
-evalBool (Or b b')  = (||) <$> (evalBool b  `mplus` bCast b) <*> (evalBool b'  `mplus` bCast b')
-evalBool (And b b') = (&&) <$> (evalBool b  `mplus` bCast b) <*> (evalBool b'  `mplus` bCast b')
-evalBool (EQ a b)   = (==) <$> eval' a <*>  eval' b
-evalBool (NEQ a b)  = (/=) <$> eval' a <*>  eval' b
-evalBool (LT a b)   = (<)  <$> evalArithm a <*> evalArithm b
-evalBool (GT a b)   = (>)  <$> evalArithm a <*> evalArithm b
-evalBool (LE a b)   = (<=) <$> evalArithm a <*> evalArithm b
-evalBool (GE a b)   = (>=) <$> evalArithm a <*> evalArithm b
-evalBool v@(Var _)  = do 
-    e' <- queryVal v  
-    case e' of
-        (C (BConstant b))  -> return b
-        e                    -> lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo booleano o casteable a booleano")
-evalBool f@(FApp vName _) = do
-    e' <- evalFApp f
-    case e' of
-        (C (BConstant b))  -> return b
-        e                    -> lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo booleano o casteable a booleano")
-evalBool e          = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo booleano o casteable a booleano")
+
+evalBool :: Bool -> Expr -> StateT STable (Either String) Bool
+evalBool p (C (BConstant  b))  = return b
+evalBool p (Not e)    = not <$>  (evalBool p e  `mplus` bCast p e)
+evalBool p (Or b b')  = (||) <$> (evalBool p b  `mplus` bCast p b) <*> (evalBool p b'  `mplus` bCast p b')
+evalBool p (And b b') = (&&) <$> (evalBool p b  `mplus` bCast p b) <*> (evalBool p b'  `mplus` bCast p b')
+evalBool p (EQ a b)   = (==) <$> eval' a <*>  eval' b
+evalBool p (NEQ a b)  = (/=) <$> eval' a <*>  eval' b
+evalBool p (LT a b)   = (<)  <$> evalArithm p a <*> evalArithm p b
+evalBool p (GT a b)   = (>)  <$> evalArithm p a <*> evalArithm p b
+evalBool p (LE a b)   = (<=) <$> evalArithm p a <*> evalArithm p b
+evalBool p (GE a b)   = (>=) <$> evalArithm p a <*> evalArithm p b
+evalBool p v@(Var _)  = queryVal v >>= evalBool p
+evalBool p f@(FApp vName _) = evalFApp f >>= evalBool p 
+evalBool _ e          = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo booleano o casteable a booleano")
 
 evalLazy :: Expr -> StateT STable (Either String) Expr
-evalLazy (Lazy e)      = return e
-evalLazy v@(Var vName) = do
-    isState <- (! v) . getTable <$> get
-    case lType isState of
-        LLazy _ -> lift . getRValue v =<< get
-        _       -> lift (Left $ "La expresion asociada a: '" ++ vName ++"' NO es de tipo Lazy.")
-evalLazy f@(FApp vName _) = do
-    e' <- evalFApp f
-    case e' of
-        (Lazy e)  -> return e
-        e         -> lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo lazy")
+evalLazy (Lazy e)    = return e
+evalLazy c@(C _)     = return c
+evalLazy (Or b b')   = Or  <$> evalLazy b <*> evalLazy b'
+evalLazy (And b b')  = And <$> evalLazy b <*> evalLazy b'
+evalLazy (EQ b b')   = EQ  <$> evalLazy b <*> evalLazy b'
+evalLazy (NEQ b b')  = NEQ <$> evalLazy b <*> evalLazy b'
+evalLazy (LT a b)    = LT  <$> evalLazy a <*> evalLazy b
+evalLazy (GT a b)    = GT  <$> evalLazy a <*> evalLazy b
+evalLazy (LE a b)    = LE  <$> evalLazy a <*> evalLazy b
+evalLazy (GE a b)    = GE  <$> evalLazy a <*> evalLazy b
+evalLazy (Negate e)  = Negate <$> evalLazy e
+evalLazy (Pos e)     = Pos    <$> evalLazy e
+evalLazy (Plus a b)  = Plus  <$> evalLazy a <*> evalLazy b
+evalLazy (Minus a b) = Minus <$> evalLazy a <*> evalLazy b
+evalLazy (Mod a b)   = Mod   <$> evalLazy a <*> evalLazy b
+evalLazy (Times a b) = Times <$> evalLazy a <*> evalLazy b
+evalLazy (Pow a b)   = Pow   <$> evalLazy a <*> evalLazy b
+evalLazy v@(Var vName) = hoist f $ getExpCValue v
+    where
+        f (Just a) = Right a
+        f Nothing  = Left $ "La expresion asociada a: '" ++ vName ++ "' NO es de tipo lazy."
+evalLazy f@(FApp vName _) = evalFApp f
 evalLazy   e      = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo lazy")
 
 
@@ -384,7 +384,7 @@ dummyPlus :: Int -> Int -> Int -> Int
 dummyPlus a b c = a + b + c
 
 dummyPlus' :: STable -> Either String Expr 
-dummyPlus' st = case  traverse evalArithm  <$> getArgList "dummyPlus" 3 st of
+dummyPlus' st = case  traverse (evalArithm True)  <$> getArgList "dummyPlus" 3 st of
     Left errMsg -> Left errMsg
     Right exprs -> 
         let Right [arg1,arg2,arg3] = evalStateT exprs st 

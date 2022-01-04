@@ -18,38 +18,40 @@ import Prelude hiding (EQ,LT,GT)
 %error {parseError}
 
 %token
-    true  { TkTrue      }
-    false { TkFalse     }
-    '%'   { TkMod       }
-    lazy  { TkLazy      }
-    int   { TkInt       }
-    bool  { TkBool      }
-    while { TkWhile     }
-    if    { TkIf        }
-    type  { TkType      }
-    '`'   { TkQuote     }
-    ','   { TkComma     }
-    ';'   { TkSemicolon }
-    TkId  { TkId  $$    }
-    TkNum { TkNum $$    }
-    '^'   { TkPower     }
-    '*'   { TkMult      }
-    '+'   { TkPlus      }
-    '-'   { TkMinus     }
-    '<='  { TkLE        }
-    '>='  { TkGE        }
-    '<'   { TkLT        }
-    '>'   { TkGT        }
-    '='   { TkEQ        }
-    '<>'  { TkNE        }
-    '!'   { TkNot       }
-    '||'  { TkOr        }
-    '&&'  { TkAnd       }
-    ':='  { TkAssign    }
-    '('   { TkOpenPar   }
-    ')'   { TkClosePar  }
-    '{'   { TkOpenBrace }
-    '}'   { TkCloseBrace}
+    true     { TkTrue      }
+    false    { TkFalse     }
+    '%'      { TkMod       }
+    lazy     { TkLazy      }
+    int      { TkInt       }
+    bool     { TkBool      }
+    while    { TkWhile     }
+    if       { TkIf        }
+    type     { TkType      }
+    '`'      { TkQuote     }
+    ','      { TkComma     }
+    ';'      { TkSemicolon }
+    TkId     { TkId     $$ }
+    TkNum    { TkNum    $$ }
+    TkString { TkString    }
+    '^'      { TkPower     }
+    '*'      { TkMult      }
+    '+'      { TkPlus      }
+    '-'      { TkMinus     }
+    '<='     { TkLE        }
+    '>='     { TkGE        }
+    '<'      { TkLT        }
+    '>'      { TkGT        }
+    '='      { TkEQ        }
+    '<>'     { TkNE        }
+    '!'      { TkNot       }
+    '||'     { TkOr        }
+    '&&'     { TkAnd       }
+    ':='     { TkAssign    }
+    '('      { TkOpenPar   }
+    ')'      { TkClosePar  }
+    '{'      { TkOpenBrace }
+    '}'      { TkCloseBrace}
+    '"'      { TkDQuote    }
 
 %right '||' 
 %right '&&' 
