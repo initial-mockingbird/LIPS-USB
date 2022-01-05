@@ -39,19 +39,22 @@ iST = STable{getTable=t}
         f4 = Var "reset"
         d4 = IdState (Fun [] Void) f4 undefined reset
 
+        f5 = Var "logB2"
+        d5 = IdState (Fun [LInt ] LInt) f5 undefined (get >>= (lift . logB2'))
+
         sp0 = Var "type"
-        d5 = IdState (Fun [Any] Any) sp0 undefined (type'' <$> get)
+        d7 = IdState (Fun [Any] Any) sp0 undefined (type'' <$> get)
 
         sp1 = Var "ltype"
-        d6 = IdState (Fun [Any] Any) sp1 undefined (get >>= (lift . lType'))
+        d8 = IdState (Fun [Any] Any) sp1 undefined (get >>= (lift . lType'))
 
         sp2 = Var "cvalue"
-        d7 = IdState (Fun [Any] Any) sp2 undefined (get >>= (lift . cvalue'))
+        d9 = IdState (Fun [Any] Any) sp2 undefined (get >>= (lift . cvalue'))
 
         sp3 = Var "if"
-        d8 = IdState (Fun [LBool,Any,Any] Any) sp3 undefined (get >>= (lift . if''))
+        d10 = IdState (Fun [LBool,Any,Any] Any) sp3 undefined (get >>= (lift . if''))
 
-        t = Map.fromList [(f0,d0),(f1,d1),(f2,d2),(f3,d3), (f4,d4), (sp0,d5), (sp1,d6), (sp2,d7),(sp3,d8)]
+        t = Map.fromList [(f0,d0),(f1,d1),(f2,d2),(f3,d3), (f4,d4), (f5,d5), (sp0,d7), (sp1,d8), (sp2,d9),(sp3,d10)]
 
 
 if' :: STable -> Expr -> Expr -> Expr -> Either String Expr
@@ -151,3 +154,30 @@ now () = unsafePerformIO $ round <$> getPOSIXTime
         a2 = sequence aux 
         a3 = unsafePerformIO a2 
         a4 = head a3
+
+-- | Logarithm in base two of an integer, returns the truncated result without decimals.
+logB2 :: Int -> Int
+logB2 x = if (odd x) then 0 else (floor . logBase 2.0 . fromIntegral) x
+
+logB2' :: STable -> Either String Expr
+logB2' st =  case  traverse (evalArithm True)  <$> getArgList "logB2" 1 st of
+    Left errMsg -> Left errMsg
+    Right exprs -> 
+        let Right [arg1] = evalStateT exprs st 
+        in  Right . mkIC $ logB2 arg1
+
+-- | Converting a number from decimal to binary
+fromDecimal :: Int -> [Int]
+fromDecimal 0 = [0]
+fromDecimal n = if (mod n 2 == 0) then 0:fromDecimal (div n 2) else 1:fromDecimal (div n 2)
+
+
+toBinary :: Int -> Int
+toBinary n = foldl ((+).(*10)) 0 (fromDecimal n)
+
+toBinary' :: STable -> Either String Expr
+toBinary' st =  case  traverse (evalArithm True)  <$> getArgList "toBinary" 1 st of
+    Left errMsg -> Left errMsg
+    Right exprs -> 
+        let Right [arg1] = evalStateT exprs st 
+        in  Right . mkIC $ toBinary arg1
