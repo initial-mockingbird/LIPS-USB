@@ -42,6 +42,9 @@ iST = STable{getTable=t}
         f5 = Var "logB2"
         d5 = IdState (Fun [LInt ] LInt) f5 undefined (get >>= (lift . logB2'))
 
+        f6 = Var "toBinary"
+        d6 = IdState (Fun [LInt ] LInt) f6 undefined (get >>= (lift . toBinary'))
+
         sp0 = Var "type"
         d7 = IdState (Fun [Any] Any) sp0 undefined (type'' <$> get)
 
@@ -54,7 +57,7 @@ iST = STable{getTable=t}
         sp3 = Var "if"
         d10 = IdState (Fun [LBool,Any,Any] Any) sp3 undefined (get >>= (lift . if''))
 
-        t = Map.fromList [(f0,d0),(f1,d1),(f2,d2),(f3,d3), (f4,d4), (f5,d5), (sp0,d7), (sp1,d8), (sp2,d9),(sp3,d10)]
+        t = Map.fromList [(f0,d0),(f1,d1),(f2,d2),(f3,d3), (f4,d4), (f5,d5), (f6,d6), (sp0,d7), (sp1,d8), (sp2,d9),(sp3,d10)]
 
 
 if' :: STable -> Expr -> Expr -> Expr -> Either String Expr
