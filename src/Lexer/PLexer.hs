@@ -65,6 +65,7 @@ reservedWords = Map.fromList
     , ("lazy",TkLazy)
     , ("while",TkWhile)
     , ("if" ,TkIf)
+    , ("fun",TkFun)
     ] 
 
 errorIdentifier :: String 

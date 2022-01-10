@@ -55,6 +55,7 @@ data Token
     | TkString       -- ^ @ string @
     | TkFloat        -- ^ @ float @
     | TkDQuote       -- ^ @ " @
+    | TkFun          -- ^ @ Fun @
     deriving (Eq,Show)
 
 newtype PrettyToken = PT Token 
