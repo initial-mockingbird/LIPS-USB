@@ -47,13 +47,17 @@ data Expr
     | Lazy   Expr
     | SeqE   Expr S
     | EString String
+    | Ret    Expr 
+    | Skip
     deriving (Eq, Ord)
 
 -- | Action tree
 data Action
     = Declaration LipsT String Expr
     | Assignment  String Expr
+    | FDeclaration LipsT String [(LipsT, String)] S
     | SeqA        Action S
+
     deriving (Eq,Ord)
 
 -- | Constant definition
@@ -175,14 +179,20 @@ sToTree (Seq a b)  = Node {rootLabel= ";", subForest=[sToTree a,sToTree b]}
 
 -- | Transforms the Action tree into a Tree type
 actionToTree :: Action -> Tree String
-actionToTree (Declaration t v e) = Node {rootLabel= ":=", subForest=[n',exprToTree e]}
+actionToTree (Declaration t v e) = Node {rootLabel= "Var Declaration", subForest=[n',exprToTree e]}
     where
         n' = Node {rootLabel= show t ++ " " ++ v, subForest=[]  }
-actionToTree (Assignment v e) = Node {rootLabel= ":=", subForest=[n',exprToTree e]}
+actionToTree (Assignment v e) = Node {rootLabel= "Var Assignment", subForest=[n',exprToTree e]}
     where
         n' = Node {rootLabel= v, subForest=[]}
 actionToTree (SeqA a s) = Node {rootLabel= "Sequence", subForest=[actionToTree a,sToTree s]}
-
+actionToTree (FDeclaration ftype fName argsList body) = Node {rootLabel= "Fun Declaration" ++ fName, subForest=subForestST}
+    where
+        typeST = Node {rootLabel= show ftype, subForest=[]}
+        nameST = Node {rootLabel= fName, subForest=[]}
+        argsST = Node {rootLabel= '(' : intercalate ","  (map (\(t,n) -> show t ++ " " ++ n) argsList) ++ ")", subForest=[]}
+        bodyST = sToTree body 
+        subForestST =[typeST,nameST,argsST,bodyST]
 
 -- | Transforms the Expr tree into a Tree type
 exprToTree :: Expr -> Tree String
@@ -209,6 +219,8 @@ exprToTree (EString s) = Node {rootLabel= s            , subForest=[]}
 exprToTree (C c)       = case c of
         BConstant b   -> Node {rootLabel= show b  , subForest=[]}
         NumConstant n -> Node {rootLabel= show n  , subForest=[]}
+exprToTree (Ret e)          = Node {rootLabel="return", subForest= [exprToTree e] }
+exprToTree Skip             = Node {rootLabel="skip", subForest= [] }
 exprToTree (FApp name args) = Node {rootLabel="FApp", subForest= name' : map exprToTree args }
     where
         name' = Node {rootLabel= name , subForest=[]}

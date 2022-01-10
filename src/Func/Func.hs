@@ -21,7 +21,7 @@ import Data.Functor.Identity ( Identity(Identity) )
 import Control.Monad.Morph
 
 iST :: STable
-iST = STable{getTable=t} 
+iST = STable{getTable=t, autoCast=True, levels = []} 
     where
         
         f0 = Var "gcd"

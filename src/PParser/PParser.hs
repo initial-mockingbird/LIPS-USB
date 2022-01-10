@@ -25,12 +25,12 @@ import           Text.Parsec            (ParsecT, SourcePos, anyToken, between,
                                          incSourceColumn, many, notFollowedBy,
                                          runParserT, sepBy, setPosition,
                                          setSourceColumn, tokenPrim, (<?>),
-                                         (<|>), getInput, sepEndBy1, try)
+                                         (<|>), getInput, sepEndBy1, try, sepBy1)
 import           Text.Parsec.Combinator (anyToken, between, eof, notFollowedBy,
                                          sepBy)
 
-import           AST.AST                (Action (Assignment, Declaration),
-                                         Constant (BConstant, NumConstant),
+import           AST.AST                (Action (..),
+                                         Constant (..),
                                          Expr (..),
                                          LipsT (..), S (..), toPrettyS)
 import qualified Control.Applicative    as A (optional)
@@ -237,7 +237,7 @@ pExpr = pP0 >>= nonAssocCheck
 
 -- | Parses an action
 pAction :: SP m Action
-pAction = try pDeclaration <|> try pAssignment
+pAction = try pFDeclaration <|> try pDeclaration <|> try pAssignment
 
 
 ------------------------------
@@ -367,6 +367,20 @@ pDeclaration = (f <$> pLType <*> pAssignment) <?> "Bad Declaration, format shoul
     where
         f t (Assignment v e) = Declaration t v e
         f _ _                = error "Impossible case"
+
+-- | Parses a function declaration
+pFDeclaration :: SP m Action 
+pFDeclaration = (f <$> ((,,,) <$> pLType <*> isId <*> pDArgs <*> between pOB pCB pAST )) <?> errMsg
+    where
+        f :: (LipsT, Expr, [(LipsT, String)], S) -> Action
+        f (returnType, Var fname, args, body ) = FDeclaration returnType fname args body
+
+        g :: LipsT -> Expr -> (LipsT, String)
+        g argType (Var argName) = (argType, argName)
+        
+        errMsg = "Bad Function Declaration, format should follow: <Return Type> fName (<Type> argName, ... ) { <function body> }"
+
+        pDArgs = between pOP pCP (sepBy (g <$> pLType <*> isId)  pComma <?> "Parse error on Function Definition argument list") <?> "Parse error: Non closing parentheses found"
 
 
 -- | Parses a lips type.
