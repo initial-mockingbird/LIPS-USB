@@ -132,14 +132,14 @@ regenerateAction (Declaration t vName e) = show t ++ " " ++ vName ++ " := " ++ r
 regenerateAction (Assignment  vName e)   = vName ++ " := " ++ regenerateExpr e
 regenerateAction (FDeclaration returnT fName args body) = intercalate " " [show returnT, fName, stringArgs, stringBody]
     where
-        stringArgs = intercalate "," ([show t ++ " " ++ var | (t,var) <- args])
-        stringBody = "{\n" ++ regenerateS body ++ "\n}"
+        stringArgs = "(" ++ intercalate "," ([show t ++ " " ++ var | (t,var) <- args]) ++ ")"
+        stringBody = "{\n" ++ regenerateS body ++ "\n}\n"
 regenerateAction _                       = undefined 
 
 regenerateS :: S -> String
-regenerateS (A a) = regenerateAction a ++ ";"
-regenerateS (E e) = regenerateExpr e ++ ";"
-regenerateS (Seq a b) = regenerateS a ++ "; " ++ regenerateS b ++ ";"
+regenerateS (A a) = regenerateAction a
+regenerateS (E e) = regenerateExpr e
+regenerateS (Seq a b) = regenerateS a ++ "; \n" ++ regenerateS b
 
 -- | Helper type to pretty print things
 newtype TS = T (Tree String)

@@ -55,20 +55,21 @@ iST = STable{getTable=t, autoCast=True, levels = []}
         d9 = IdState (Fun [Any] Any) sp2 undefined (get >>= (lift . cvalue'))
 
         sp3 = Var "if"
-        d10 = IdState (Fun [LBool,Any,Any] Any) sp3 undefined (get >>= (lift . if''))
+        d10 = IdState (Fun [LBool,Any,Any] Any) (FApp "if" [Var "if@condition", Var "if@ifTrue", Var "if@ifFalse"]) undefined if''
 
         t = Map.fromList [(f0,d0),(f1,d1),(f2,d2),(f3,d3), (f4,d4), (f5,d5), (f6,d6), (sp0,d7), (sp1,d8), (sp2,d9),(sp3,d10)]
 
 
-if' :: STable -> Expr -> Expr -> Expr -> Either String Expr
-if' st b e e' = case evalStateT (evalBool True b) st of
-    Right b' -> if b' then evalStateT (eval' e) st else evalStateT (eval' e') st
-    Left e   -> Left e
+if'' :: StateT STable (Either String) Expr
+if'' = do 
+    st   <- getTable  <$> get
+    args <-  getLazyArgList' "if" 
+    case args of
+        [arg1,arg2,arg3] -> do
+            b <- evalBool True arg1
+            if b then eval' arg2 else eval' arg3
+        _                -> lift . Left $ "If only has 3 arguments"
 
-if'' :: STable -> Either String Expr 
-if'' st = if' st arg1 arg2 arg3
-    where
-        [arg1,arg2,arg3] =  getLazyArgList "if" 3  st
 
 type' :: Expr -> STable  -> Expr 
 type' (Var "type")   _ =  EString "type"

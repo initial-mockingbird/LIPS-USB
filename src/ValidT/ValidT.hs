@@ -36,13 +36,20 @@ validate node tabla
     | sisSeq node = do 
         let (exp1,exp2) = takeSeq node 
         tipo1 <- validate exp1 tabla
-        tipo2 <- validate exp2 tabla
+        tabla' <-  updateTable exp1 tabla
+        tipo2 <- validate exp2 tabla'
 
         if sisE exp2 && exprIsReturn (sTakeExpr exp2) then
             return tipo2
         else 
             return tipo1
     | otherwise = validateExp (sTakeExpr node) tabla
+
+
+updateTable :: S -> STable -> Either String STable
+updateTable (E _) t = Right t
+updateTable a@(A _) t = execStateT (updateST a) t 
+updateTable (Seq a b) t = updateTable a t >>= updateTable b
 
 -- This function validate an action (declaration of assignament)
 validateAction 
@@ -73,7 +80,8 @@ validateAction node tabla
         --    | FDeclaration LipsT String [(LipsT, String)] S
         let (typeReturn,name,arg,bodyF) = takeFDeclaration node
         let tabla2 = addArgsToTable arg tabla
-        tipo <- validate bodyF tabla2
+        tabla3 <- execStateT (updateST (A node)) tabla2
+        tipo <- validate bodyF tabla3
         if compareT typeReturn tipo then 
             return tipo
         else 
@@ -93,9 +101,10 @@ validateExp node tabla
         return (LLazy tipo)
     | exprIsFApp node = do 
         let (name, lista) = takeFApp node 
+        
         tiposParam <- traverse (`validateExp` tabla) lista
         (tipoF, tiposF) <- getFunc name tabla
-
+        
         if length tiposParam == length tiposF then
             if and $ zipWith compareT tiposParam  tiposF then
                 return tipoF
@@ -152,6 +161,7 @@ nextType var = var
 
 -- containedT x y | te dice si 'x' esta contenido en 'y'
 containedT :: LipsT -> LipsT -> Bool
+containedT Any _ = True
 containedT t1 t2
     | t1 == t2 = True
     | t2 == nextType t2 = False
@@ -309,7 +319,8 @@ getExpCValue e = lift . getCValue . Map.lookup e . getTable =<< get
 getRValue :: Identifier -> STable -> Either String Expr
 getRValue v st@STable{getTable=t} = evalStateT prod st
     where
-        prod = rValue  (t ! v) 
+        
+        prod =  queryVal' v >>= rValue
 
 -- | Sets a given identifier or yields an error if any error happens
 setIdentifier' :: Identifier -> Expr -> LipsT -> STable -> STable
@@ -386,7 +397,7 @@ evalArithm p (Mod a b)   = mod <$> evalArithm p a <*> evalArithm p b
 evalArithm p (Times a b) = (*) <$> evalArithm p a <*> evalArithm p b
 evalArithm p (Pow a b)   = (^) <$> evalArithm p a <*> evalArithm p b
 evalArithm p v@(Var _)   = queryVal v  >>= evalArithm p
-evalArithm p f@(FApp vName _) = (evalFApp f `mplus` evalFApp' f)  >>= evalArithm p
+evalArithm p f@(FApp vName _) = (evalFApp' f `mplus` evalFApp' f)  >>= evalArithm p
 evalArithm p  e          = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo aritmetico")
 
 
@@ -407,7 +418,7 @@ evalBool p (GT a b)   = (>)  <$> evalArithm p a <*> evalArithm p b
 evalBool p (LE a b)   = (<=) <$> evalArithm p a <*> evalArithm p b
 evalBool p (GE a b)   = (>=) <$> evalArithm p a <*> evalArithm p b
 evalBool p v@(Var _)  = queryVal v >>= evalBool p
-evalBool p f@(FApp vName _) = (evalFApp f `mplus` evalFApp' f) >>= evalBool p 
+evalBool p f@(FApp vName _) = (evalFApp' f `mplus` evalFApp' f) >>= evalBool p 
 evalBool _ e          = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo booleano o casteable a booleano")
 
 
@@ -424,6 +435,7 @@ evalLazy   e      = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de 
 evalFApp :: Expr -> StateT STable (Either String) Expr
 evalFApp (FApp fName args) = do
     st@STable{getTable=t} <- get
+    --trace (show args) return ()
     let
         f = getRValue (Var fName)
 
@@ -440,6 +452,7 @@ evalFApp (FApp fName args) = do
         t'              = foldr (uncurry Map.insert) t (serializeNames `zip` serializeArgs )
         fromRight (Right a) = a
 
+    trace (show $ Map.keys t') return ()
     lift $ f st{getTable=t'} 
     
 evalFApp e              = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo funcion")
@@ -451,9 +464,9 @@ evalFApp' aux@(FApp fName argsVal) = do
     st@STable {getTable=t} <- get
     
     fState <- queryVal' (Var fName)
+    args <- case lValue fState of FApp _ as -> lift . Right $ as; _ -> lift . Left $ fName ++ " is not a user defined function!"
+
     let 
-        (FApp _ args')  =  lValue fState
-        args = (\(Var name) -> Var $ name) <$> args'
         (Fun argsT _)  = lType fState
 
         f = getRValue (Var fName)
@@ -496,6 +509,25 @@ getLazyArgList :: String -> Int -> STable -> [Expr]
 getLazyArgList fName nArgs st@STable{getTable=t} =  cValue . (t !)  <$> argsNames
     where
         argsNames = [ Var $ fName ++ "@" ++ show n | n <- [1..nArgs]]
+        args = do
+            addLevel fName
+            prefix <- getPrefix
+            st@STable {getTable=t} <- get
+            
+            fState <- queryVal' (Var fName)
+            case lValue fState of FApp _ as -> lift . Right $ as; _ -> lift . Left $ fName ++ " is not a user defined function!"
+
+
+
+getLazyArgList' :: String -> StateT STable (Either String) [Expr]
+getLazyArgList' fName = do
+    addLevel fName
+    prefix <- getPrefix
+    st@STable {getTable=t} <- get
+    
+    fState <- queryVal' (Var fName)
+    case lValue fState of FApp _ as -> lift . Right $ as; _ -> lift . Left $ fName ++ " is not a user defined function!"
+
 
 
 dummyPlus :: Int -> Int -> Int -> Int
