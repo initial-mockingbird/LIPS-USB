@@ -122,12 +122,18 @@ regenerateExpr (Var vName)                  = vName
 regenerateExpr (C (NumConstant n))          = show n
 regenerateExpr (C (BConstant b))            = show b
 regenerateExpr (EString s)                  = show s
+regenerateExpr (Ret e)                      = "return " ++ regenerateExpr e 
+regenerateExpr Skip                         = "Unit"
 regenerateExpr c@(SeqE a b)                 = undefined
 
 
 regenerateAction :: Action -> String
 regenerateAction (Declaration t vName e) = show t ++ " " ++ vName ++ " := " ++ regenerateExpr e
 regenerateAction (Assignment  vName e)   = vName ++ " := " ++ regenerateExpr e
+regenerateAction (FDeclaration returnT fName args body) = intercalate " " [show returnT, fName, stringArgs, stringBody]
+    where
+        stringArgs = intercalate "," ([show t ++ " " ++ var | (t,var) <- args])
+        stringBody = "{\n" ++ regenerateS body ++ "\n}"
 regenerateAction _                       = undefined 
 
 regenerateS :: S -> String

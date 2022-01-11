@@ -21,6 +21,7 @@ import           Prelude          hiding (EQ, GT, LT)
 import Control.Monad.Morph
 import Data.Functor.Identity ( Identity(Identity) ) 
 import qualified PParser.PParser as PP
+import Data.List (intercalate)
 import Debug.Trace
 
 -- | This function return de type of an action or a expression
@@ -130,9 +131,9 @@ validateExp node tabla
 
 -- Functions signstures
 getFunc :: String -> STable -> Either String (LipsT,[LipsT])
-getFunc name st@STable{getTable=t} = case Map.lookup ( Var name) t of
-    Nothing       -> Left ("No existe la funcion "++name)
-    Just idState  -> case lType idState of 
+getFunc name st@STable{getTable=t} = case evalStateT (queryVal' (Var name)) st  of
+    Left e       -> Left e
+    Right idState  -> case lType idState of 
         (Fun args res) -> Right (res,args)
         _              -> Left (name ++ " no es de tipo funcion.")
 
@@ -162,6 +163,7 @@ transformT x y = y
 
 -- Function to add a list of variables to a table
 addArgsToTable :: [(LipsT, String)] -> STable -> STable
+addArgsToTable [] t = t
 addArgsToTable [x] cuTable = do 
     let (tipo,nombre) = x
     let newTable = setIdentifier nombre exp1 tipo cuTable
@@ -204,30 +206,47 @@ addIdState e eID f = modify g
         g :: STable -> STable
         g  t@STable {getTable=_getTable} = t{getTable=Map.insertWith f e eID _getTable}
 
+addLevel :: String -> StateT STable (Either String) ()
+addLevel level = do
+    t@STable {levels=_levels} <- get
+    put t{levels=level:_levels}
+
+dropLevel :: StateT STable (Either String) ()
+dropLevel = do
+    t@STable {levels=_levels} <- get
+    put t{levels= tail _levels}
+
+getPrefix :: Monad m => StateT STable m String 
+getPrefix = concatMap (++"@") . levels <$> get
+
 -- | Tries to Update the Symbol Table 
 updateST :: S -> StateT STable (Either String) ()
 updateST (A (Declaration t vName e)) = do 
+    prefix <- getPrefix
     e' <- eval' e 
     let _e = case e of Lazy expr -> expr; expr -> expr 
-    let vState = IdState t (Var vName) _e (eval' e')
-    addIdState (Var vName) vState const 
-updateST (A (Assignment vName expr)) = do 
-    t <- (! Var vName) . getTable <$> get
+    let vState = IdState t (Var (prefix ++ vName)) _e (eval' e')
+    addIdState (Var (prefix ++ vName)) vState const 
+updateST (A (Assignment vName expr)) = do
+    prefix <- getPrefix 
+    t <- queryVal' (Var vName)
     e' <- eval' expr
     let newState = IdState { lType  = lType t
         , lValue = lValue t
         , cValue = case expr of Lazy e -> e; e -> e
         , rValue = eval' e'
         }
-    addIdState (Var vName) newState const 
+    addIdState (Var (prefix ++ vName)) newState const 
 updateST (A (FDeclaration ftype fname args body)) = do
+    prefix  <- concatMap (++"@") .  (fname :) . levels <$> get
+    prefix' <- getPrefix
     let
         fLType  = Fun (map fst args) ftype
-        fLVal   = Var fname
+        fLVal   = FApp (prefix' ++ fname) (map (Var . (prefix ++) . snd) args)
         fCValue = undefined  -- body
         fRValue = evalUF body
         newState = IdState {lType=fLType, lValue=fLVal, cValue=fCValue, rValue=fRValue}
-    addIdState (Var fname) newState const
+    addIdState (Var $ prefix' ++ fname) newState const
 
 updateST (A (SeqA a s)) = error "cannot happen"
 updateST (E _) = return ()
@@ -312,7 +331,8 @@ getAutocast = autoCast <$> get
 
 -- | Dummy eval
 eval' :: Expr -> StateT STable (Either String) Expr 
-eval' expr = eF <+> eB <+> eA <+> eL <+> (getAutocast >>= \b -> if b  then eBC <+> eAC else mzero )
+eval' ret@(Ret e) = return ret
+eval' expr = eF <+> eF' <+> eB <+> eA <+> eL <+> (getAutocast >>= \b -> if b  then eBC <+> eAC else mzero )
     where
         (<+>) = mplus  
         eA  = mkIC <$> evalArithm False expr 
@@ -320,7 +340,8 @@ eval' expr = eF <+> eB <+> eA <+> eL <+> (getAutocast >>= \b -> if b  then eBC <
         eAC = mkIC <$> evalArithm True expr 
         eBC = mkBC <$> evalBool True expr
         eL  = evalLazy expr
-        eF  = evalFApp expr
+        eF  = evalFApp' expr
+        eF' = evalFApp' expr
 
 eval :: S -> StateT STable (Either String) S
 eval (E e) = E <$> eval' e
@@ -331,8 +352,8 @@ eitherToMaybe :: Either b a -> Maybe a
 eitherToMaybe (Right a) = Just a
 eitherToMaybe (Left _)  = Nothing 
 
-queryVal :: Expr -> StateT STable (Either String) Expr 
-queryVal e = do 
+queryVal' :: Expr -> StateT STable (Either String) IdState 
+queryVal' e = do 
     t <-  get
     name <- case e of Var n -> return n; FApp n _ -> return n; _ -> lift . Left $ "Cannot query"
     let  
@@ -340,17 +361,18 @@ queryVal e = do
         scopes xs n = scanr (\new acc -> new ++ "@" ++ acc ) n xs 
         
         lookupEnvs :: STable -> [String] -> String -> Either String IdState
-        lookupEnvs STable {getTable=t} xs =  f . foldl (\acc new -> acc `mplus` Map.lookup new t ) Nothing . map Var . scopes xs
+        lookupEnvs STable {getTable=t} xs v =  f . foldl (\acc new -> acc `mplus` Map.lookup new t ) Nothing . map Var . scopes xs $ v
             where
                 f (Just a) = Right a
-                f Nothing  = Left "Variable does not exist in the current environment."
+                f Nothing  = Left $ "Variable: " ++ v ++ " does not exist in the current environment: " ++ show (Map.keys t)
         
         prefixes = levels t 
         
-    lift (lookupEnvs t prefixes name) >>=  rValue
+    lift (lookupEnvs t prefixes name) 
 
     -- rValue .  (! e) . getTable =<< get 
-    
+queryVal :: Expr -> StateT STable (Either String) Expr
+queryVal e = queryVal' e >>=  rValue
     
 
 evalArithm :: Bool -> Expr -> StateT STable (Either String) Int
@@ -364,7 +386,7 @@ evalArithm p (Mod a b)   = mod <$> evalArithm p a <*> evalArithm p b
 evalArithm p (Times a b) = (*) <$> evalArithm p a <*> evalArithm p b
 evalArithm p (Pow a b)   = (^) <$> evalArithm p a <*> evalArithm p b
 evalArithm p v@(Var _)   = queryVal v  >>= evalArithm p
-evalArithm p f@(FApp vName _) = evalFApp f >>= evalArithm p
+evalArithm p f@(FApp vName _) = (evalFApp f `mplus` evalFApp' f)  >>= evalArithm p
 evalArithm p  e          = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo aritmetico")
 
 
@@ -385,7 +407,7 @@ evalBool p (GT a b)   = (>)  <$> evalArithm p a <*> evalArithm p b
 evalBool p (LE a b)   = (<=) <$> evalArithm p a <*> evalArithm p b
 evalBool p (GE a b)   = (>=) <$> evalArithm p a <*> evalArithm p b
 evalBool p v@(Var _)  = queryVal v >>= evalBool p
-evalBool p f@(FApp vName _) = evalFApp f >>= evalBool p 
+evalBool p f@(FApp vName _) = (evalFApp f `mplus` evalFApp' f) >>= evalBool p 
 evalBool _ e          = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo booleano o casteable a booleano")
 
 
@@ -422,16 +444,47 @@ evalFApp (FApp fName args) = do
     
 evalFApp e              = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo funcion")
 
+evalFApp' :: Expr -> StateT STable (Either String) Expr
+evalFApp' aux@(FApp fName argsVal) = do
+    addLevel fName
+    prefix <- getPrefix
+    st@STable {getTable=t} <- get
+    
+    fState <- queryVal' (Var fName)
+    let 
+        (FApp _ args')  =  lValue fState
+        args = (\(Var name) -> Var $ name) <$> args'
+        (Fun argsT _)  = lType fState
+
+        f = getRValue (Var fName)
+
+        serializeArg (name, arg, t) = IdState 
+            { lType  = t
+            , lValue = name
+            , cValue = arg
+            , rValue = eval' arg
+            }
+        
+        serializeArgs   = serializeArg <$> zip3 args argsVal argsT
+        t'              = foldr (uncurry Map.insert) t (args `zip` serializeArgs)
+        fromRight (Right a) = a
+    res <-   lift $ f st{getTable= t'} 
+    put st
+    dropLevel
+    return res 
+evalFApp' e              = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo funcion")
+
 evalUF :: S -> StateT STable (Either String) Expr
 evalUF (Seq ast@(A action) b) = updateST ast >> evalUF b
 evalUF (Seq ast@(E expr) b)   = do
     e <- eval' expr
     case e of 
-        Ret e' -> return e'
+        Ret e' -> eval' e'
         _      -> evalUF b
 evalUF (Seq (Seq a a') b)   = evalUF $ Seq a (Seq a' b)
 evalUF ast@(A action) = updateST ast >> return Skip 
-evalUF (E expr)       = eval' expr >> return Skip
+evalUF (E (Ret e))    = eval' e
+evalUF (E expr)       = eval' expr 
 
 
 getArgList :: String -> Int -> STable -> Either String [Expr]

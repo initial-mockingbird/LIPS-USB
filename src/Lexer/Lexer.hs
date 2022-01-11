@@ -56,7 +56,6 @@ data Token
     | TkFloat        -- ^ @ float @
     | TkDQuote       -- ^ @ " @
     | TkReturn       -- ^ @ return @
-    | TkFun 
     deriving (Eq,Show)
 
 newtype PrettyToken = PT Token 
@@ -106,6 +105,7 @@ instance Show PrettyToken where
     show (PT TkString)       = "string"
     show (PT TkFloat)        = "float"
     show (PT TkReturn)       = "return"
+    show (PT TkDQuote)       = "\""
 
 -- | Auxiliary type, will provide a "logged" version of Either
 newtype LEither a = L (Either [(String,Int)] a)

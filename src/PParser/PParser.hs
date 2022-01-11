@@ -38,7 +38,7 @@ import           Control.Monad.IO.Class (MonadIO (liftIO))
 import           Data.Functor.Identity  (Identity (Identity))
 import           Prelude                hiding (EQ, GE, GT, LE, LT)
 import           Text.Parsec.Error      (errorMessages, messageString)
-
+import Data.Functor ((<&>))
 ------------------------------
 -- Types
 ------------------------------
@@ -62,41 +62,41 @@ genSymbolParser tk = tokenPrim show g f
 pS, pM, pNot, pMult, pOP, pCP, pQuote                :: Monad m => ParsecT [Token] u m Token
 pMod, pLazy, pInt, pBool, pWhile, pIf, pType, pComma :: Monad m => ParsecT [Token] u m Token
 pSColon, pPower, pLE, pGE, pLT, pGT, pEQ, pNE, pOr   :: Monad m => ParsecT [Token] u m Token
-pAnd, pAssign, pOB, pCB, pDQ                    :: Monad m => ParsecT [Token] u m Token
+pAnd, pAssign, pOB, pCB, pDQ, pReturnTk              :: Monad m => ParsecT [Token] u m Token
 -- pTrue, pFalse :: Monad m => ParsecT [Token] u m Token
 
-pS      = genSymbolParser TkPlus
-pM      = genSymbolParser TkMinus
-pNot    = genSymbolParser TkNot
-pMult   = genSymbolParser TkMult
-pOP     = genSymbolParser TkOpenPar
-pCP     = genSymbolParser TkClosePar
-pQuote  = genSymbolParser TkQuote
---pTrue   = genSymbolParser TkTrue
---pFalse  = genSymbolParser TkFalse
-pMod    = genSymbolParser TkMod
-pLazy   = genSymbolParser TkLazy
-pInt    = genSymbolParser TkInt
-pDQ     = genSymbolParser TkDQuote
-pBool   = genSymbolParser TkBool
-pWhile  = genSymbolParser TkWhile
-pIf     = genSymbolParser TkIf
-pType   = genSymbolParser TkType
-pComma  = genSymbolParser TkComma
-pSColon = genSymbolParser TkSemicolon
-pPower  = genSymbolParser TkPower
-pLE     = genSymbolParser TkLE
-pGE     = genSymbolParser TkGE
-pLT     = genSymbolParser TkLT
-pGT     = genSymbolParser TkGT
-pEQ     = genSymbolParser TkEQ
-pNE     = genSymbolParser TkNE
-pOr     = genSymbolParser TkOr
-pAnd    = genSymbolParser TkAnd
-pAssign = genSymbolParser TkAssign
-pOB     = genSymbolParser TkOpenBrace
-pCB     = genSymbolParser TkCloseBrace
-
+pS        = genSymbolParser TkPlus
+pM        = genSymbolParser TkMinus
+pNot      = genSymbolParser TkNot
+pMult     = genSymbolParser TkMult
+pOP       = genSymbolParser TkOpenPar
+pCP       = genSymbolParser TkClosePar
+pQuote    = genSymbolParser TkQuote
+--pTrue     = genSymbolParser TkTrue
+--pFalse    = genSymbolParser TkFalse
+pMod      = genSymbolParser TkMod
+pLazy     = genSymbolParser TkLazy
+pInt      = genSymbolParser TkInt
+pDQ       = genSymbolParser TkDQuote
+pBool     = genSymbolParser TkBool
+pWhile    = genSymbolParser TkWhile
+pIf       = genSymbolParser TkIf
+pType     = genSymbolParser TkType
+pComma    = genSymbolParser TkComma
+pSColon   = genSymbolParser TkSemicolon
+pPower    = genSymbolParser TkPower
+pLE       = genSymbolParser TkLE
+pGE       = genSymbolParser TkGE
+pLT       = genSymbolParser TkLT
+pGT       = genSymbolParser TkGT
+pEQ       = genSymbolParser TkEQ
+pNE       = genSymbolParser TkNE
+pOr       = genSymbolParser TkOr
+pAnd      = genSymbolParser TkAnd
+pAssign   = genSymbolParser TkAssign
+pOB       = genSymbolParser TkOpenBrace
+pCB       = genSymbolParser TkCloseBrace
+pReturnTk = genSymbolParser TkReturn 
 ------------------------------
 -- Parsers for the basic types
 ------------------------------
@@ -174,24 +174,24 @@ isLazyT = tokenPrim show g f
         g pos _  _    = incSourceColumn pos 1
 
 -- | Builds an expression parser for the variable or function application type.
-isIdOrFapp :: SP m Expr
-isIdOrFapp = do
+isIdOrFapp :: Bool -> SP m Expr
+isIdOrFapp b = do
     var@(Var fName) <- isId
     let fapp' = do
             pOP
-            fArgs <- pArgs <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
+            fArgs <- pArgs b <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
             notFollowedBy pComma <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
             pCP <?> ("Error in function '" ++ fName ++ "': Non closing Parenthesis found.")
             return $ FApp fName fArgs
 
     fapp' <|> return var
 
-isIf' :: SP m Expr
-isIf' = do
+isIf' :: Bool -> SP m Expr
+isIf' b = do
     var@(Var fName) <- isIf
     let fapp' = do
             pOP
-            fArgs <- pArgs <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
+            fArgs <- pArgs b <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
             notFollowedBy pComma <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
             pCP <?> ("Error in function '" ++ fName ++ "': Non closing Parenthesis found.")
             return $ FApp fName fArgs
@@ -203,7 +203,7 @@ isType' = do
     var@(Var fName) <- isType
     let fapp' = do
             pOP
-            fArgs <- pArgs <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
+            fArgs <- pArgs False <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
             notFollowedBy pComma <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
             pCP <?> ("Error in function '" ++ fName ++ "': Non closing Parenthesis found.")
             return $ FApp fName fArgs
@@ -211,8 +211,8 @@ isType' = do
     fapp' <|> return var
 
 -- | Builds an expression parser for the arguments of a function.
-pArgs :: SP m [Expr]
-pArgs = sepBy pExpr pComma
+pArgs :: Bool -> SP m [Expr]
+pArgs b = sepBy (pExpr b <|> if b then pReturn else fail "Parse error: Bad expression inside Function Application") pComma
 
 
 ------------------------------
@@ -220,18 +220,21 @@ pArgs = sepBy pExpr pComma
 ------------------------------
 
 -- | Parses an AST
-pAST :: SP m S
-pAST = foldl1 Seq <$> sepEndBy1 pAST' pSColon
+pAST :: Bool -> SP m S
+pAST b = foldl1 Seq <$> sepEndBy1 (pAST' b) pSColon
 
 -- | Parses an AST
-pAST' :: SP m S
-pAST' = (A <$> pAction) <|> (E <$> pExpr )
+pAST' :: Bool -> SP m S
+pAST' b = (A <$> pAction) <|> (E <$> (pExpr b <|> if b then pReturn else fail "Parse error: Bad Expression" ))
 
 
+
+pReturn :: SP m Expr
+pReturn = (pReturnTk >> pExpr False) <&> Ret
 
 -- | Parses an expression, validating the non-assocs operators
-pExpr :: SP m Expr
-pExpr = pP0 >>= nonAssocCheck
+pExpr :: Bool -> SP m Expr
+pExpr b = pP0 b >>= nonAssocCheck
 
 
 
@@ -245,27 +248,27 @@ pAction = try pFDeclaration <|> try pDeclaration <|> try pAssignment
 ------------------------------
 
 -- | Parses a precedence 0 expression
-pP0 :: SP m Expr
-pP0 = toETree <$> pP1 <*> many ((,) <$> p0Ops <*> pP1)
+pP0 :: Bool -> SP m Expr
+pP0 b = toETree <$> pP1 b <*> many ((,) <$> p0Ops <*> pP1 b )
     where
         p0Ops = pAnd
 
 -- | Parses a precedence 1 expression
-pP1 :: SP m Expr
-pP1 = toETree <$> pP2 <*> many ((,) <$> p1Ops <*> pP2)
+pP1 :: Bool -> SP m Expr
+pP1 b = toETree <$> pP2 b <*> many ((,) <$> p1Ops <*> pP2 b )
     where
         p1Ops = pOr
 
 -- | Parses a precedence 2 expression
-pP2 :: SP m Expr
-pP2 = toETree <$> pP3 <*> many ((,) <$> p2Ops <*> pP3)
+pP2 :: Bool -> SP m Expr
+pP2 b = toETree <$> pP3 b <*> many ((,) <$> p2Ops <*> pP3 b )
     where
         p2Ops = pEQ <|>
                 pNE
 
 -- | Parses a precedence 3 expression
-pP3 :: SP m Expr
-pP3 = toETree <$> pP4 <*> many ((,) <$> p3Ops <*> pP4)
+pP3 :: Bool -> SP m Expr
+pP3 b = toETree <$> pP4 b <*> many ((,) <$> p3Ops <*> pP4 b)
     where
         p3Ops = pGT <|>
                 pLT <|>
@@ -273,20 +276,20 @@ pP3 = toETree <$> pP4 <*> many ((,) <$> p3Ops <*> pP4)
                 pLE
 
 -- | Parses a precedence 4 expression
-pP4 :: SP m Expr
-pP4 = toETree <$> pP5 <*> many ((,) <$> p4Ops <*> pP5)
+pP4 :: Bool -> SP m Expr
+pP4 b = toETree <$> pP5 b <*> many ((,) <$> p4Ops <*> pP5 b )
     where
         p4Ops = pS <|> pM
 
 -- | Parses a precedence 5 expression
-pP5 :: SP m Expr
-pP5 = toETree <$> pP6 <*> many ((,) <$> p5Ops <*> pP6)
+pP5 :: Bool -> SP m Expr
+pP5 b = toETree <$> pP6 b <*> many ((,) <$> p5Ops <*> pP6 b )
     where
         p5Ops = pMult <|> pMod
 
 -- | Parses a precedence 6 expression
-pP6 :: SP m Expr
-pP6 = g <$> A.optional (many uOP) <*> (toETree <$> pP7 <*> many ((,) <$> p6Ops <*> pP7))
+pP6 :: Bool -> SP m Expr
+pP6 b = g <$> A.optional (many uOP) <*> (toETree <$> pP7 b <*> many ((,) <$> p6Ops <*> pP7 b))
     where
         p6Ops = pPower
         uOP = pNot <|> pM <|> pS
@@ -301,12 +304,12 @@ pP6 = g <$> A.optional (many uOP) <*> (toETree <$> pP7 <*> many ((,) <$> p6Ops <
         g (Just []) x = x
 
 -- | Parses a precedence 7 expression
-pP7 :: SP m Expr
-pP7 =  pParenE <|> pQuoteE <|> isNum <|> isBool <|> isIf' <|> isType' <|> isIdOrFapp <|> customErrorParse
+pP7 :: Bool -> SP m Expr
+pP7 b =  pParenE <|> pQuoteE <|> isNum <|> isBool <|> isIf' b <|> isType' <|> isIdOrFapp b <|> customErrorParse
     where
-        pParenE = between pOP    (pCP    <?> "Non closing parenthesis Found") pExpr
-        pQuoteE = between pQuote (pQuote <?> "Non closing Quote found Found") ( Lazy <$> pExpr)
-        pDQE    = between pDQ    (pDQ    <?> "Non closing Double Quote found Found") pExpr
+        pParenE = between pOP    (pCP    <?> "Non closing parenthesis Found") (pExpr b)
+        pQuoteE = between pQuote (pQuote <?> "Non closing Quote found Found") ( Lazy <$> pExpr b)
+        pDQE    = between pDQ    (pDQ    <?> "Non closing Double Quote found Found") (pExpr b)
         customErrorParse = do
             s <- getInput 
             if null s 
@@ -370,7 +373,7 @@ pDeclaration = (f <$> pLType <*> pAssignment) <?> "Bad Declaration, format shoul
 
 -- | Parses a function declaration
 pFDeclaration :: SP m Action 
-pFDeclaration = (f <$> ((,,,) <$> pLType <*> isId <*> pDArgs <*> between pOB pCB pAST )) <?> errMsg
+pFDeclaration = (f <$> ((,,,) <$> pLType <*> isId <*> pDArgs <*> between pOB pCB (pAST True) )) <?> errMsg
     where
         f :: (LipsT, Expr, [(LipsT, String)], S) -> Action
         f (returnType, Var fname, args, body ) = FDeclaration returnType fname args body
@@ -389,7 +392,7 @@ pLType = (isBoolT <|> isIntT <|> isStringT <|> isLazyT <*> pLType) <?> "Bad type
 
 -- | Parses an assignment
 pAssignment :: SP m Action
-pAssignment = f <$> (isId <?> "Parse error: Can only assign identifiers") <*> ((,) <$> (pAssign <?> "Bad assing symbol") <*> pExpr )
+pAssignment = f <$> (isId <?> "Parse error: Can only assign identifiers") <*> ((,) <$> (pAssign <?> "Bad assing symbol") <*> pExpr False )
     where
         f :: Expr -> (Token, Expr) -> Action
         f (Var v) (TkAssign, e ) = Assignment v e
@@ -413,7 +416,7 @@ parse' s = case manyToken s of
 parse' :: String -> Either (String,Int) S
 parse' s = case manyToken s of
     Left err -> Left . last $ err
-    Right tks -> case runParserT pAST () "" tks of
+    Right tks -> case runParserT (pAST False) () "" tks of
         Identity  (Left e)    -> Left (show e,-1)
         Identity (Right expr) -> Right expr
 
@@ -427,7 +430,7 @@ parse sn = do
             let (err,col) = last xs
             setPosition $ setSourceColumn pos col
             fail err
-        Right tks -> case runParserT pAST () sn tks of
+        Right tks -> case runParserT (pAST False) () sn tks of
             Identity (Left parseError) -> do
                 let epos = errorPos parseError
                 let emsg = messageString $ last $ errorMessages parseError
