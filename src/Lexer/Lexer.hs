@@ -55,7 +55,8 @@ data Token
     | TkString       -- ^ @ string @
     | TkFloat        -- ^ @ float @
     | TkDQuote       -- ^ @ " @
-    | TkFun          -- ^ @ Fun @
+    | TkReturn       -- ^ @ return @
+    | TkFun 
     deriving (Eq,Show)
 
 newtype PrettyToken = PT Token 
@@ -104,7 +105,7 @@ instance Show PrettyToken where
     show (PT TkLazy)         = "lazy"
     show (PT TkString)       = "string"
     show (PT TkFloat)        = "float"
-
+    show (PT TkReturn)       = "return"
 
 -- | Auxiliary type, will provide a "logged" version of Either
 newtype LEither a = L (Either [(String,Int)] a)
@@ -139,8 +140,8 @@ tkSim = [ TkQuote, TkComma, TkAssign, TkSemicolon, TkYields, TkRArrow, TkLArrow,
 
 -- | Reserverd words of LIPS-USB language
 reservedWord :: [[Char]]
-reservedWord = [ "int", "bool", "type", "false", "true", "lazy", "while","if", "string", "float" ]
-tkReservedWord = [TkInt, TkBool, TkType, TkFalse, TkTrue, TkLazy, TkWhile, TkIf, TkString, TkFloat]
+reservedWord = [ "int", "bool", "type", "false", "true", "lazy", "while","if", "string", "float", "return" ]
+tkReservedWord = [TkInt, TkBool, TkType, TkFalse, TkTrue, TkLazy, TkWhile, TkIf, TkString, TkFloat, TkReturn]
 
 -- | Special characters = Opertaros U Symbols
 spe :: [[Char]]

@@ -32,6 +32,15 @@ validate
     -> Either String LipsT -- ^ return (errorMessage or Type of the expression)
 validate node tabla 
     | sisAction node = validateAction (sTakeAction node) tabla
+    | sisSeq node = do 
+        let (exp1,exp2) = takeSeq node 
+        tipo1 <- validate exp1 tabla
+        tipo2 <- validate exp2 tabla
+
+        if sisE exp2 && exprIsReturn (sTakeExpr exp2) then
+            return tipo2
+        else 
+            return tipo1
     | otherwise = validateExp (sTakeExpr node) tabla
 
 -- This function validate an action (declaration of assignament)
@@ -48,7 +57,7 @@ validateAction node tabla
         if containedT tipoExp tipo1 then
             return tipo1
         else
-            Left ("Declaracion invalida de "++name++" | la expresion a la derecha es de tipo "++show(tipoExp) ++ " y la variable debe ser "++show(tipo1) )
+            Left ("Error: Declaracion invalida de "++name++" | la expresion a la derecha es de tipo "++show(tipoExp) ++ " y la variable debe ser "++show(tipo1) )
     -- In an assignament the type of the expression should be the same as the variable
     | aisAssignment node = do 
         let (name,exp) = takeAssignment node 
@@ -59,6 +68,15 @@ validateAction node tabla
             return tipo1
         else
             Left ("Error: Declaracion invalida de "++name++" | Declarada como "++show(tipo1) ++ " pero estas asignando " ++ show(tipoExp) )
+    | aisFDeclaration node = do 
+        --    | FDeclaration LipsT String [(LipsT, String)] S
+        let (typeReturn,name,arg,bodyF) = takeFDeclaration node
+        let tabla2 = addArgsToTable arg tabla
+        tipo <- validate bodyF tabla2
+        if compareT typeReturn tipo then 
+            return tipo
+        else 
+            Left ("Error: En la declaracion de la funcion '"++name++"' el tipo de la declaracion '"++show(typeReturn)++"' no coincide con el tipo retornado '"++show(tipo)++"'")
     | otherwise = Left "Error: A validate no se le puede pasar una secuencia de acciones"
 
 -- This function validate an expression
@@ -84,6 +102,8 @@ validateExp node tabla
                 Left ("Error en tipos de parametros en llamada a funcion "++name ++ " los correctos tipos son = "++show(tiposParam))
         else 
             Left ("Error en numero de parametros en llamada a funcion "++name)
+    | exprIsReturn node = do 
+        validateExp (takeReturn node) tabla 
     | exprIsVar node = do
         tipo <- lookupType (takeVar node) tabla
         return tipo 
@@ -108,7 +128,7 @@ validateExp node tabla
     | exprIsSeqE node = Left "La funcion validate no puede contener una secuencia de acciones/expresiones"
     | otherwise = Left "Error tipo de expresion no reconocido"
 
--- Definicion de firmas de funciones (return, tipos de los param)
+-- Functions signstures
 getFunc :: String -> STable -> Either String (LipsT,[LipsT])
 getFunc name st@STable{getTable=t} = case Map.lookup ( Var name) t of
     Nothing       -> Left ("No existe la funcion "++name)
@@ -140,10 +160,24 @@ transformT :: LipsT -> LipsT -> LipsT
 transformT (LLazy tipo) final = LLazy $ transformT tipo final
 transformT x y = y 
 
+-- Function to add a list of variables to a table
+addArgsToTable :: [(LipsT, String)] -> STable -> STable
+addArgsToTable [x] cuTable = do 
+    let (tipo,nombre) = x
+    let newTable = setIdentifier nombre exp1 tipo cuTable
+    newTable
+addArgsToTable (x:xs) cuTable = do 
+    let (tipo,nombre) = x
+    let newTable = setIdentifier nombre exp1 tipo cuTable
+    addArgsToTable xs newTable 
+
 {-
 mainValidate = do
-    temp <- parse "lazy bool z := 1 = 2"
+    -- int Fun( int a, int b, lazy int c ){ a; b&&True; }
+    -- int Fun( int a ){ a; }
+    temp <- parse' "int Fun( int a, int b ){ false; b; a; }"
     return $ validate temp initialST
+
 -}
 
 --------------------------------

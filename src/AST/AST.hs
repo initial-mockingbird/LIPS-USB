@@ -23,7 +23,7 @@ import           Prelude          hiding (EQ, GT, LT)
 -- | AST tree
 data S = A Action | E Expr | Seq S S  deriving (Eq,Ord)
 
--- | Expression tree
+-- | Expression tree 
 data Expr
     = Negate Expr
     | Pos    Expr
@@ -254,6 +254,17 @@ sTakeExpr (E x) = x
 sTakeAction :: S -> Action
 sTakeAction (A x) = x
 
+sisSeq :: S -> Bool
+sisSeq (Seq _ _ ) = True
+sisSeq _ = False
+
+takeSeq :: S -> (S,S)
+takeSeq (Seq v1 v2) = (v1,v2) 
+
+sisE :: S -> Bool
+sisE (E _) = True
+sisE _ = False
+
 -- === Actions ===
 
 aisDeclaration :: Action -> Bool
@@ -266,6 +277,14 @@ takeDeclaration (Declaration v1 v2 v3) = (v1,v2,v3)
 aisAssignment :: Action -> Bool
 aisAssignment (Assignment _ _) = True
 aisAssignment _ = False
+
+--    | FDeclaration LipsT String [(LipsT, String)] S
+takeFDeclaration :: Action -> (LipsT, String, [(LipsT,String)],S) 
+takeFDeclaration (FDeclaration v1 v2 v3 v4 ) = (v1,v2,v3,v4) 
+
+aisFDeclaration :: Action -> Bool 
+aisFDeclaration (FDeclaration _ _ _ _) = True
+aisFDeclaration _ = False 
 
 takeAssignment :: Action -> (String, Expr)
 takeAssignment (Assignment v1 v2) = (v1,v2)
@@ -361,6 +380,13 @@ takeFromBinaryExpr ( LE ex1 ex2 ) = (ex1,ex2)
 takeFromBinaryExpr ( GE ex1 ex2 ) = (ex1,ex2)
 takeFromBinaryExpr ( Or ex1 ex2 ) = (ex1,ex2)
 takeFromBinaryExpr ( And ex1 ex2 ) = (ex1,ex2)
+
+exprIsReturn :: Expr -> Bool
+exprIsReturn (Ret _) = True
+exprIsReturn _ = False
+
+takeReturn :: Expr -> Expr
+takeReturn (Ret exp1) = exp1 
 
 -- Secuencia de expresiones
 exprIsSeqE :: Expr -> Bool
