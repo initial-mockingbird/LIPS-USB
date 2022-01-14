@@ -205,7 +205,7 @@ data STable = STable { getTable :: Map Identifier IdState, autoCast :: Bool, lev
 data IdState = IdState  
     { lType  :: LipsT                  -- ^ The variable type
     , lValue :: Expr                   -- ^ The L-value of the variable
-    , cValue :: Expr                   -- ^ The C-value of the variable
+    , cValue :: S                   -- ^ The C-value of the variable
     , rValue :: StateT STable (Either String) Expr  -- ^ A way to calculate the rValue of a variable.
     }
 
@@ -235,7 +235,7 @@ updateST (A (Declaration t vName e)) = do
     prefix <- getPrefix
     e' <- eval' e 
     let _e = case e of Lazy expr -> expr; expr -> expr 
-    let vState = IdState t (Var (prefix ++ vName)) _e (eval' e')
+    let vState = IdState t (Var (prefix ++ vName)) (E _e) (eval' e')
     addIdState (Var (prefix ++ vName)) vState const 
 updateST (A (Assignment vName expr)) = do
     prefix <- getPrefix 
@@ -243,7 +243,7 @@ updateST (A (Assignment vName expr)) = do
     e' <- eval' expr
     let newState = IdState { lType  = lType t
         , lValue = lValue t
-        , cValue = case expr of Lazy e -> e; e -> e
+        , cValue = case expr of Lazy e -> E e; e -> E e
         , rValue = eval' e'
         }
     addIdState (Var (prefix ++ vName)) newState const 
@@ -307,11 +307,10 @@ getExpType e = do
     Right t <- validate (E e) <$> get 
     return t 
 
-getExpCValue ::  Identifier -> StateT STable Maybe Expr
+getExpCValue ::  Identifier -> StateT STable Maybe S
 getExpCValue e = lift . getCValue . Map.lookup e . getTable =<< get 
     where
-        getCValue :: Maybe IdState -> Maybe Expr
-        getCValue (Just IdState{lType=Fun _ _}) = Nothing
+        getCValue :: Maybe IdState -> Maybe S
         getCValue mid                           = cValue <$> mid 
 
 
@@ -329,7 +328,7 @@ setIdentifier' vName expr vType t@STable{getTable=table} = t{getTable=Map.insert
         newId = IdState 
             { lType  = vType
             , lValue = vName 
-            , cValue = expr
+            , cValue = E expr
             , rValue = eval' expr
             }
 
@@ -425,13 +424,15 @@ evalBool _ e          = lift (Left $ "Error: la expresion " ++ show e ++ " NO es
 evalLazy :: Expr -> StateT STable (Either String) Expr
 evalLazy (Lazy e)    = return e
 evalLazy c@(C _)     = return c
-evalLazy v@(Var vName) = hoist f $ getExpCValue v
+evalLazy v@(Var vName) = hoist f (getExpCValue v) >>= g
     where
         f (Just a) = Right a
         f Nothing  = Left $ "La expresion asociada a: '" ++ vName ++ "' NO es de tipo lazy."
+        g (E e) = return e
+        g _ = lift . Left $ "Variables can't have actions as cvalues"
 evalLazy   e      = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo lazy")
 
-
+{-
 evalFApp :: Expr -> StateT STable (Either String) Expr
 evalFApp (FApp fName args) = do
     st@STable{getTable=t} <- get
@@ -456,6 +457,8 @@ evalFApp (FApp fName args) = do
     lift $ f st{getTable=t'} 
     
 evalFApp e              = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo funcion")
+-}
+
 
 evalFApp' :: Expr -> StateT STable (Either String) Expr
 evalFApp' aux@(FApp fName argsVal) = do
@@ -474,7 +477,7 @@ evalFApp' aux@(FApp fName argsVal) = do
         serializeArg (name, arg, t) = IdState 
             { lType  = t
             , lValue = name
-            , cValue = arg
+            , cValue = E arg
             , rValue = eval' arg
             }
         
@@ -505,22 +508,20 @@ getArgList fName nArgs st@STable{getTable=t} = sequence $ ($ st) . getRValue  <$
     where
         argsNames = [ Var $ fName ++ "@" ++ show n | n <- [1..nArgs]]
 
-getLazyArgList :: String -> Int -> STable -> [Expr]
-getLazyArgList fName nArgs st@STable{getTable=t} =  cValue . (t !)  <$> argsNames
-    where
-        argsNames = [ Var $ fName ++ "@" ++ show n | n <- [1..nArgs]]
-        args = do
-            addLevel fName
-            prefix <- getPrefix
-            st@STable {getTable=t} <- get
-            
-            fState <- queryVal' (Var fName)
-            case lValue fState of FApp _ as -> lift . Right $ as; _ -> lift . Left $ fName ++ " is not a user defined function!"
+getArgList' :: String -> StateT STable (Either String) [Expr]
+getArgList' fName = do 
+    addLevel fName
+    prefix <- getPrefix
+    st@STable {getTable=t} <- get
+    
+    fState <- queryVal' (Var fName)
+    case lValue fState of 
+        FApp _ as -> traverse eval' as
+        _ -> lift . Left $ fName ++ " is not a user defined function!"
 
 
-
-getLazyArgList' :: String -> StateT STable (Either String) [Expr]
-getLazyArgList' fName = do
+getLazyArgList :: String -> StateT STable (Either String) [Expr]
+getLazyArgList  fName = do
     addLevel fName
     prefix <- getPrefix
     st@STable {getTable=t} <- get
@@ -573,21 +574,21 @@ initialST = STable{getTable=t, autoCast=True, levels=[]}
         v1 = Var "dani"
         d1 = IdState { lType  = LInt 
             , lValue =  v1
-            , cValue = mkIC 10
+            , cValue = E $ mkIC 10
             , rValue = return $ mkIC 10
             }
         
         v2 = Var "angelito"
         d2 = IdState { lType  = LInt 
             , lValue = v2
-            , cValue = mkIC (-15)
+            , cValue = E $ mkIC (-15)
             , rValue = return $ mkIC (-15)
             }
         
         v3 = Var "mari"
         d3 = IdState { lType  = LLazy LInt 
             , lValue = v3
-            , cValue = Lazy (Plus (mkIC 4) v2 )
+            , cValue = E $ Lazy (Plus (mkIC 4) v2 )
             , rValue = eval' $ Lazy (Plus (mkIC 4) v2 )
             }
 

@@ -25,34 +25,34 @@ iST = STable{getTable=t, autoCast=True, levels = []}
     where
         
         f0 = Var "gcd"
-        d0 = IdState (Fun [LInt, LInt ] LInt ) f0 undefined (get >>= (lift . gcd'))
+        d0 = IdState (Fun [LInt, LInt ] LInt ) (FApp "gcd" [Var "gcd@x", Var "gcd@y"])  undefined gcd'
 
         f1 = Var "fibo"
-        d1 = IdState (Fun [LInt ] LInt) f1 undefined (get >>= (lift . fibo'))
+        d1 = IdState (Fun [LInt ] LInt) (FApp "fibo" [Var "fibo@n"])  undefined fibo'
 
         f2 = Var "irandom"
-        d2 = IdState (Fun [LInt] LInt ) f2 undefined (get >>= (lift . fmap mkIC . irandom'))
+        d2 = IdState (Fun [LInt] LInt ) (FApp "irandom" [Var "irandom@n"]) undefined irandom'
 
         f3 = Var "now"
-        d3 = IdState (Fun [] LInt) f3 undefined (mkIC . (\ _ ->  now ())  <$> get)
+        d3 = IdState (Fun [] LInt) (FApp "now" []) undefined (mkIC . (\ _ ->  now ())  <$> get)
         
         f4 = Var "reset"
-        d4 = IdState (Fun [] Void) f4 undefined reset
+        d4 = IdState (Fun [] Void) (FApp "reset" []) undefined reset
 
         f5 = Var "logB2"
-        d5 = IdState (Fun [LInt ] LInt) f5 undefined (get >>= (lift . logB2'))
+        d5 = IdState (Fun [LInt ] LInt) (FApp "logB2" [Var "logB2@n"]) undefined logB2'
 
         f6 = Var "toBinary"
-        d6 = IdState (Fun [LInt ] LInt) f6 undefined (get >>= (lift . toBinary'))
+        d6 = IdState (Fun [LInt ] LInt) (FApp "toBinary" [Var "toBinary@n"]) undefined toBinary'
 
         sp0 = Var "type"
-        d7 = IdState (Fun [Any] Any) sp0 undefined (type'' <$> get)
+        d7 = IdState (Fun [Any] Any) (FApp "type" [Var "type@expr"]) undefined type''
 
         sp1 = Var "ltype"
-        d8 = IdState (Fun [Any] Any) sp1 undefined (get >>= (lift . lType'))
+        d8 = IdState (Fun [Any] Any) (FApp "ltype" [Var "ltype@expr"]) undefined lType'
 
         sp2 = Var "cvalue"
-        d9 = IdState (Fun [Any] Any) sp2 undefined (get >>= (lift . cvalue'))
+        d9 = IdState (Fun [Any] Any) (FApp "cvalue" [Var "cvalue@expr"]) undefined cvalue'
 
         sp3 = Var "if"
         d10 = IdState (Fun [LBool,Any,Any] Any) (FApp "if" [Var "if@condition", Var "if@ifTrue", Var "if@ifFalse"]) undefined if''
@@ -63,7 +63,7 @@ iST = STable{getTable=t, autoCast=True, levels = []}
 if'' :: StateT STable (Either String) Expr
 if'' = do 
     st   <- getTable  <$> get
-    args <-  getLazyArgList' "if" 
+    args <-  getLazyArgList "if" 
     case args of
         [arg1,arg2,arg3] -> do
             b <- evalBool True arg1
@@ -82,31 +82,44 @@ type' e              st = case validate (E e) st of
 
 fromRight (Right a) = a     
 
-type'' :: STable  -> Expr 
-type'' st = type' arg1 st 
-    where
-        [arg1] =   getLazyArgList "type" 1  st
+
+type'' :: StateT STable (Either String) Expr
+type'' = do
+    st   <- getTable  <$> get
+    args <-  getLazyArgList "type" 
+    case args of
+        [arg1] -> type' arg1 <$> get 
+        _      -> lift . Left $ "If only has 1 argument"
 
 lType :: Expr -> StateT STable Maybe LipsT
 lType = getExpLType
 
-lType' :: STable  -> Either String Expr 
-lType' st = case evalStateT (Func.Func.lType arg1) st of
-    Just t   -> Right . EString $ show t
-    Nothing  -> Left "Error! Expression doesn't have an L-Type"
-    where
-        [arg1] =   getLazyArgList "ltype" 1  st
+lType' :: StateT STable (Either String) Expr
+lType' = do
+    let 
+        g (Just t) = Right t
+        g Nothing  = Left "Error! Expression doesn't have an L-Type"
+    st   <- getTable  <$> get
+    args <-  getLazyArgList "ltype" 
+    case args of
+        [arg1] -> EString . show  <$> hoist g (Func.Func.lType arg1)
+        _      -> lift . Left $ "If only has 1 argument" 
+        
 
 cvalue :: Expr -> StateT STable Maybe Expr
-cvalue = getExpCValue
+cvalue = fmap (EString .  regenerateS) . getExpCValue
 
 
-cvalue' :: STable  -> Either String Expr 
-cvalue' st = case evalStateT (Func.Func.cvalue arg1) st of
-    Just t   -> Right t
-    Nothing  -> Left  "Error! Expression doesn't have a C-Value"
-    where
-        [arg1] =   getLazyArgList "cvalue" 1  st 
+cvalue' :: StateT STable (Either String) Expr
+cvalue' = do
+    st   <- getTable  <$> get
+    args <-  getLazyArgList "cvalue" 
+    let 
+        g (Just t) = Right t
+        g Nothing  = Left "Error! Expression doesn't have a C-Value"
+    case args of
+        [arg1] -> hoist g $ Func.Func.cvalue arg1
+        _      -> lift . Left $ "If only has 1 argument"
 
 reset :: Monad m => StateT STable m Expr 
 reset = put iST >> return (mkBC True)
@@ -119,13 +132,14 @@ irandom n
     | otherwise = return $ Left "The upper limit must be at least zero"
 
 
-irandom' :: STable -> Either String Int
-irandom' st = case  traverse (evalArithm True)  <$> getArgList "irandom" 1 st of
-    Left errMsg -> Left errMsg
-    Right exprs -> 
-        let Right [arg1] = evalStateT exprs st 
-        in  unsafePerformIO $ irandom arg1
 
+irandom' :: StateT STable (Either String) Expr
+irandom' = do
+    st   <- getTable  <$> get
+    args <-  getArgList' "irandom" 
+    case args of
+        [arg1] ->  evalArithm True arg1 >>= fmap mkIC . lift . unsafePerformIO . irandom  
+        _      -> lift . Left $ "If only has 1 argument"
 
 -- | Fibonacci calculator
 fibo :: Int -> Int
@@ -133,21 +147,19 @@ fibo n = fib !! n
     where
         fib = 0 : 1 : [a + b | (a, b) <- zip fib (tail fib)]
 
-fibo' :: STable -> Either String Expr
-fibo' st =  case  traverse (evalArithm True)  <$> getArgList "fibo" 1 st of
-    Left errMsg -> Left errMsg
-    Right exprs -> 
-        let Right [arg1] = evalStateT exprs st 
-        in  Right . mkIC $ fibo arg1
+fibo' :: StateT STable (Either String) Expr
+fibo' = do
+    args <-  getArgList' "fibo" 
+    case args of
+        [arg1] -> mkIC . fibo <$> evalArithm True arg1
+        _      -> lift . Left $ "If only has 1 argument"
 
-
-gcd' :: STable -> Either String Expr
-gcd' st = case  traverse (evalArithm True)  <$> getArgList "gcd" 2 st of
-    Left errMsg -> Left errMsg
-    Right exprs -> 
-        let Right [arg1,arg2] = evalStateT exprs st 
-        in  Right . mkIC $ gcd arg1 arg2
-
+gcd' :: StateT STable (Either String) Expr
+gcd' = do 
+    args <- getArgList' "gcd"   >>= traverse (evalArithm True) 
+    case args of 
+        [arg1,arg2] -> return . mkIC $ gcd arg1 arg2
+        _           -> lift . Left $ "If only has 2 arguments"
 
 -- | Milliseconds elapsed since January 1, 1970 at midnight UTC time 
 now :: () -> Int
@@ -163,12 +175,15 @@ now () = unsafePerformIO $ round <$> getPOSIXTime
 logB2 :: Int -> Int
 logB2 x = if (odd x) then 0 else (floor . logBase 2.0 . fromIntegral) x
 
-logB2' :: STable -> Either String Expr
-logB2' st =  case  traverse (evalArithm True)  <$> getArgList "logB2" 1 st of
-    Left errMsg -> Left errMsg
-    Right exprs -> 
-        let Right [arg1] = evalStateT exprs st 
-        in  Right . mkIC $ logB2 arg1
+
+
+logB2' :: StateT STable (Either String) Expr
+logB2' = do
+    args <-  getArgList' "logB2" 
+    case args of
+        [arg1] -> mkIC . logB2 <$> evalArithm True arg1
+        _      -> lift . Left $ "If only has 1 argument"
+
 
 -- | Converting a number from decimal to binary
 fromDecimal :: Int -> [Int]
@@ -179,9 +194,9 @@ fromDecimal n = if (mod n 2 == 0) then 0:fromDecimal (div n 2) else 1:fromDecima
 toBinary :: Int -> Int
 toBinary n = foldl ((+).(*10)) 0 (fromDecimal n)
 
-toBinary' :: STable -> Either String Expr
-toBinary' st =  case  traverse (evalArithm True)  <$> getArgList "toBinary" 1 st of
-    Left errMsg -> Left errMsg
-    Right exprs -> 
-        let Right [arg1] = evalStateT exprs st 
-        in  Right . mkIC $ toBinary arg1
+toBinary' :: StateT STable (Either String) Expr
+toBinary' = do
+    args <-  getArgList' "logB2" 
+    case args of
+        [arg1] -> mkIC . toBinary <$> evalArithm True arg1
+        _      -> lift . Left $ "If only has 1 argument"
