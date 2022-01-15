@@ -64,11 +64,12 @@ iST = STable{getTable=t, autoCast=True, levels = []}
 
 if'' :: StateT STable (Either String) Expr
 if'' = do 
+    aC   <- autoCast <$> get
     st   <- getTable  <$> get
     args <-  getLazyArgList "if" 
     case args of
         [arg1,arg2,arg3] -> do
-            b <- evalBool True arg1
+            b <- evalBool aC arg1
             if b then eval' arg2 else eval' arg3
         _                -> lift . Left $ "If only has 3 arguments"
 

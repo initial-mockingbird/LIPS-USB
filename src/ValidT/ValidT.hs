@@ -101,12 +101,15 @@ validateExp node tabla
         return (LLazy tipo)
     | exprIsFApp node = do 
         let (name, lista) = takeFApp node 
+            compareT' :: LipsT -> LipsT -> Bool
+            compareT' t@(LLazy x) y = x == y || compareT  t y
+            compareT'  x y           = compareT x y
         
         tiposParam <- traverse (`validateExp` tabla) lista
         (tipoF, tiposF) <- getFunc name tabla
         
         if length tiposParam == length tiposF then
-            if and $ zipWith compareT tiposParam  tiposF then
+            if and $ zipWith compareT' tiposParam  tiposF then
                 return tipoF
             else 
                 Left ("Error en tipos de parametros en llamada a funcion "++name ++ " los correctos tipos son = "++show(tiposF))
@@ -242,7 +245,10 @@ data IdState = IdState
     , lValue :: Expr                   -- ^ The L-value of the variable
     , cValue :: S                   -- ^ The C-value of the variable
     , rValue :: StateT STable (Either String) Expr  -- ^ A way to calculate the rValue of a variable.
-    }
+    } 
+
+instance Show IdState where
+    show IdState {lType=_lType, lValue=_lValue, cValue=_cValue} = show $ "lType: " ++ show _lType ++ "\nlValue: " ++ show _lValue ++"\ncValue: " ++ show _cValue
 
 -- | Aux function that modifies an entry in the Symbol table.
 addIdState :: Monad m => Identifier -> IdState -> (IdState -> IdState -> IdState) -> StateT STable m ()
@@ -378,8 +384,18 @@ getAutocast = autoCast <$> get
 -- | Dummy eval
 eval' :: Expr -> StateT STable (Either String) Expr 
 eval' ret@(Ret e) = return ret
-eval' expr = eF <+> eB <+> eA <+> eL <+> (getAutocast >>= \b -> if b  then eBC <+> eAC else mzero )
+eval' expr = do
+    expectedType <- (g . lType <$> queryVal' expr) `mplus` lift (Right Any)
+    --trace ("Expected type is: " ++ show expectedType) return ()
+    canAC <- getAutocast
+    res <- eF <+> eB <+> eA <+> eL <+> if canAC then eBC <+> eAC else mzero 
+    case expectedType of 
+        LInt    -> mkIC <$> evalArithm canAC res 
+        LBool   -> mkBC <$> evalBool canAC res
+        _       -> return res 
     where
+        g (Fun _ ret) = ret
+        g r           = r
         (<+>) = mplus  
         eA  = mkIC <$> evalArithm False expr 
         eB  = mkBC <$> evalBool False expr
@@ -478,9 +494,8 @@ evalFApp' aux@(FApp fName argsVal') = do
     prefix <- getPrefix
     st@STable {getTable=t} <- get
     argsVal <- traverse (\x -> fmap Left (queryVal' x) `mplus` return (Right x))  argsVal'
-    
     fState <- queryVal' (Var fName)
-    args <- case lValue fState of FApp _ as -> lift . Right $ as; _ -> lift . Left $ fName ++ " is not a user defined function!"
+    args <- case lValue fState of FApp _ as -> lift . Right $   as; _ -> lift . Left $ fName ++ " is not a user defined function!"
 
     let 
         (Fun argsT _)  = lType fState
@@ -503,6 +518,7 @@ evalFApp' aux@(FApp fName argsVal') = do
         serializeArgs   = serializeArg <$> zip3 args argsVal argsT
         t'              = foldr (uncurry Map.insert) t (args `zip` serializeArgs)
         fromRight (Right a) = a
+    
     res <-   lift $ f st{getTable= t'} 
     put st
     dropLevel
