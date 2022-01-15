@@ -192,6 +192,12 @@ mainValidate = do
 
 -}
 
+
+mainRegenerateS = do 
+    arbol <- parse' "1 + (2 + 3) + 1^2^3"
+    return $ regenerateS $ arbol 
+
+
 --------------------------------
 
 -- | An Identifier is just a String for now... (Can be changed into an expression or anything

@@ -96,7 +96,7 @@ getPrec (SeqE _ _)  = 1
 
 regenerateChild :: Expr -> Expr -> String
 regenerateChild father child 
-    | getPrec father > getPrec child = "(" ++ regenerateExpr child ++ ")"
+    | getPrec father >= getPrec child = "(" ++ regenerateExpr child ++ ")"
     | otherwise                      = regenerateExpr child
 
 regenerateExpr :: Expr -> String
