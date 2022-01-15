@@ -1,14 +1,2 @@
-.lex 123 asfg
-.lex 454878
-.lex sdfgh
-.lex ////
-
-.lex 154
-
-987--++
-.lex ==
-.lex kwejrfgh klfjfj 123456 =--
-.lex sjf 5454 jfdj
-.load test2.txt
-sdfghj
-.reset
+int f( int x ){ return if(x=1, 1, 2); }
+g(1);

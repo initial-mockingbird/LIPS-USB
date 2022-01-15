@@ -109,8 +109,11 @@ validateExp node tabla
         (tipoF, tiposF) <- getFunc name tabla
         
         if length tiposParam == length tiposF then
-            if and $ zipWith compareT' tiposParam  tiposF then
-                return tipoF
+            if and $ zipWith compareT' tiposParam tiposF then
+                if name == "if" then
+                    return $ last tiposParam 
+                else 
+                    return tipoF
             else 
                 Left ("Error en tipos de parametros en llamada a funcion "++name ++ " los correctos tipos son = "++show(tiposF))
         else 
@@ -189,6 +192,7 @@ addArgsToTable (x:xs) cuTable = do
 
 
 {-
+
 mainValidate = do
     -- int Fun( int a, int b, lazy int c ){ a; b&&True; }
     -- int Fun( int a ){ a; }
@@ -216,10 +220,6 @@ fibo' = do
     case args of
         [arg1] -> mkIC . fibo <$> evalArithm True arg1
         _      -> lift . Left $ "If only has 1 argument"
-
-
-
-
 
 
 
@@ -274,19 +274,18 @@ getPrefix = concatMap (++"@") . levels <$> get
 updateST :: S -> StateT STable (Either String) ()
 updateST (A (Declaration t vName e)) = do 
     prefix <- getPrefix
-    --e' <- eval' e 
-    _e <- case e of Lazy expr -> return expr; expr -> eval' expr 
-    let vState = IdState t (Var (prefix ++ vName)) (E _e) (eval' _e)
+    e' <- eval' e 
+    let _e = case e of Lazy expr -> expr; expr -> expr 
+    let vState = IdState t (Var (prefix ++ vName)) (E _e) (eval' e')
     addIdState (Var (prefix ++ vName)) vState const 
 updateST (A (Assignment vName expr)) = do
     prefix <- getPrefix 
     t <- queryVal' (Var vName)
-    --e' <- eval' expr
-    _e <- case expr of Lazy e -> return e; e -> eval' e
+    e' <- eval' expr
     let newState = IdState { lType  = lType t
         , lValue = lValue t
-        , cValue = E _e
-        , rValue = eval' _e
+        , cValue = case expr of Lazy e -> E e; e -> E e
+        , rValue = eval' e'
         }
     addIdState (Var (prefix ++ vName)) newState const 
 updateST (A (FDeclaration ftype fname args body)) = do
@@ -295,7 +294,7 @@ updateST (A (FDeclaration ftype fname args body)) = do
     let
         fLType  = Fun (map fst args) ftype
         fLVal   = FApp (prefix' ++ fname) (map (Var . (prefix ++) . snd) args)
-        fCValue = body
+        fCValue = undefined  -- body
         fRValue = evalUF body
         newState = IdState {lType=fLType, lValue=fLVal, cValue=fCValue, rValue=fRValue}
     addIdState (Var $ prefix' ++ fname) newState const
@@ -336,11 +335,12 @@ lookupType :: String -> STable -> Either String LipsT
 lookupType vName = lookupType' ("La variable: '" ++ vName ++ "' no ha sido declarada, error de asignacion!.") (Var vName)
 
 getExpLType :: Identifier  -> StateT STable Maybe LipsT
-getExpLType e =  lType <$> hoist f (queryVal' e)
+getExpLType (FApp v _) = getExpLType (Var v) 
+getExpLType e = lift . funChecker . fmap lType . Map.lookup e . getTable =<< get
     where
-        f :: Either b a -> Maybe a
-        f (Right a) = Just a
-        f _         = Nothing 
+        funChecker :: Maybe LipsT -> Maybe LipsT
+        funChecker (Just (Fun _ _)) = Nothing 
+        funChecker ml               = ml 
 
     
 getExpType :: (Monad m, MonadFail m) => Expr -> StateT STable m LipsT
@@ -349,11 +349,10 @@ getExpType e = do
     return t 
 
 getExpCValue ::  Identifier -> StateT STable Maybe S
-getExpCValue e = hoist f $ cValue <$> queryVal' e 
+getExpCValue e = lift . getCValue . Map.lookup e . getTable =<< get 
     where
-        f :: Either b a -> Maybe a
-        f (Right a) = Just a
-        f _         = Nothing 
+        getCValue :: Maybe IdState -> Maybe S
+        getCValue mid                           = cValue <$> mid 
 
 
 
@@ -384,6 +383,7 @@ getAutocast = autoCast <$> get
 -- | Dummy eval
 eval' :: Expr -> StateT STable (Either String) Expr 
 eval' ret@(Ret e) = return ret
+<<<<<<< HEAD
 eval' expr = do
     expectedType <- (g . lType <$> queryVal' expr) `mplus` lift (Right Any)
     --trace ("Expected type is: " ++ show expectedType) return ()
@@ -393,6 +393,9 @@ eval' expr = do
         LInt    -> mkIC <$> evalArithm canAC res 
         LBool   -> mkBC <$> evalBool canAC res
         _       -> return res 
+=======
+eval' expr = eF <+> eF' <+> eB <+> eA <+> eL <+> (getAutocast >>= \b -> if b  then eBC <+> eAC else mzero )
+>>>>>>> da90e91024defb3e02ee2323bd3e03f37c895879
     where
         g (Fun _ ret) = ret
         g r           = r
@@ -403,6 +406,7 @@ eval' expr = do
         eBC = mkBC <$> evalBool True expr
         eL  = evalLazy expr
         eF  = evalFApp' expr
+        eF' = evalFApp' expr
 
 eval :: S -> StateT STable (Either String) S
 eval (E e) = E <$> eval' e
@@ -447,9 +451,7 @@ evalArithm p (Mod a b)   = mod <$> evalArithm p a <*> evalArithm p b
 evalArithm p (Times a b) = (*) <$> evalArithm p a <*> evalArithm p b
 evalArithm p (Pow a b)   = (^) <$> evalArithm p a <*> evalArithm p b
 evalArithm p v@(Var _)   = queryVal v  >>= evalArithm p
-evalArithm p f@(FApp vName _) = evalFApp' f   >>= evalArithm p
-evalArithm p e@(Lazy (Lazy _ ))  = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo aritmetico") 
-evalArithm p (Lazy e)    = evalArithm p e
+evalArithm p f@(FApp vName _) = (evalFApp' f `mplus` evalFApp' f)  >>= evalArithm p
 evalArithm p  e          = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo aritmetico")
 
 
@@ -470,10 +472,8 @@ evalBool p (GT a b)   = (>)  <$> evalArithm p a <*> evalArithm p b
 evalBool p (LE a b)   = (<=) <$> evalArithm p a <*> evalArithm p b
 evalBool p (GE a b)   = (>=) <$> evalArithm p a <*> evalArithm p b
 evalBool p v@(Var _)  = queryVal v >>= evalBool p
-evalBool p f@(FApp vName _)    = (evalFApp' f `mplus` evalFApp' f) >>= evalBool p 
-evalBool p e@(Lazy (Lazy _ ))  = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo booleano") 
-evalBool p (Lazy e)   = evalBool p e
-evalBool _ e          = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo booleano")
+evalBool p f@(FApp vName _) = (evalFApp' f `mplus` evalFApp' f) >>= evalBool p 
+evalBool _ e          = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo booleano o casteable a booleano")
 
 
 evalLazy :: Expr -> StateT STable (Either String) Expr
@@ -487,13 +487,44 @@ evalLazy v@(Var vName) = hoist f (getExpCValue v) >>= g
         g _ = lift . Left $ "Variables can't have actions as cvalues"
 evalLazy   e      = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo lazy")
 
+{-
+evalFApp :: Expr -> StateT STable (Either String) Expr
+evalFApp (FApp fName args) = do
+    st@STable{getTable=t} <- get
+    --trace (show args) return ()
+    let
+        f = getRValue (Var fName)
+
+        serializeArg (name, arg) = IdState 
+            { lType  = fromRight $ validateExp arg st
+            , lValue = name
+            , cValue = arg
+            , rValue = eval' arg
+            }
+        
+        serializeName n = fName ++ "@" ++ show n
+        serializeNames  = Var <$> [serializeName n | n <- [1..(length args)]]
+        serializeArgs   = serializeArg <$> zip serializeNames args
+        t'              = foldr (uncurry Map.insert) t (serializeNames `zip` serializeArgs )
+        fromRight (Right a) = a
+
+    trace (show $ Map.keys t') return ()
+    lift $ f st{getTable=t'} 
+    
+evalFApp e              = lift (Left $ "Error: la expresion " ++ show e ++ " NO es de tipo funcion")
+-}
+
 
 evalFApp' :: Expr -> StateT STable (Either String) Expr
-evalFApp' aux@(FApp fName argsVal') = do
+evalFApp' aux@(FApp fName argsVal) = do
     addLevel fName
     prefix <- getPrefix
     st@STable {getTable=t} <- get
+<<<<<<< HEAD
     argsVal <- traverse (\x -> fmap Left (queryVal' x) `mplus` return (Right x))  argsVal'
+=======
+    
+>>>>>>> da90e91024defb3e02ee2323bd3e03f37c895879
     fState <- queryVal' (Var fName)
     args <- case lValue fState of FApp _ as -> lift . Right $   as; _ -> lift . Left $ fName ++ " is not a user defined function!"
 
@@ -502,16 +533,10 @@ evalFApp' aux@(FApp fName argsVal') = do
 
         f = getRValue (Var fName)
 
-        serializeArg (name, Left arg, t) = IdState 
+        serializeArg (name, arg, t) = IdState 
             { lType  = t
             , lValue = name
-            , cValue = cValue arg
-            , rValue = rValue arg 
-            }
-        serializeArg (name, Right arg, t) = IdState 
-            { lType  = t
-            , lValue = name
-            , cValue = E (EString "Expressions don't have cValue")
+            , cValue = E arg
             , rValue = eval' arg
             }
         
