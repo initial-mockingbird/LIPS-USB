@@ -383,7 +383,6 @@ getAutocast = autoCast <$> get
 -- | Dummy eval
 eval' :: Expr -> StateT STable (Either String) Expr 
 eval' ret@(Ret e) = return ret
-<<<<<<< HEAD
 eval' expr = do
     expectedType <- (g . lType <$> queryVal' expr) `mplus` lift (Right Any)
     --trace ("Expected type is: " ++ show expectedType) return ()
@@ -393,9 +392,6 @@ eval' expr = do
         LInt    -> mkIC <$> evalArithm canAC res 
         LBool   -> mkBC <$> evalBool canAC res
         _       -> return res 
-=======
-eval' expr = eF <+> eF' <+> eB <+> eA <+> eL <+> (getAutocast >>= \b -> if b  then eBC <+> eAC else mzero )
->>>>>>> da90e91024defb3e02ee2323bd3e03f37c895879
     where
         g (Fun _ ret) = ret
         g r           = r
@@ -520,11 +516,7 @@ evalFApp' aux@(FApp fName argsVal) = do
     addLevel fName
     prefix <- getPrefix
     st@STable {getTable=t} <- get
-<<<<<<< HEAD
-    argsVal <- traverse (\x -> fmap Left (queryVal' x) `mplus` return (Right x))  argsVal'
-=======
     
->>>>>>> da90e91024defb3e02ee2323bd3e03f37c895879
     fState <- queryVal' (Var fName)
     args <- case lValue fState of FApp _ as -> lift . Right $   as; _ -> lift . Left $ fName ++ " is not a user defined function!"
 
