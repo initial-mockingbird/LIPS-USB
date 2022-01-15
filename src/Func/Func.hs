@@ -24,38 +24,40 @@ iST :: STable
 iST = STable{getTable=t, autoCast=True, levels = []} 
     where
         
+        invalidCVal = E $ EString "Predefined functions can't have cvalue"
+
         f0 = Var "gcd"
-        d0 = IdState (Fun [LInt, LInt ] LInt ) (FApp "gcd" [Var "gcd@x", Var "gcd@y"])  undefined gcd'
+        d0 = IdState (Fun [LInt, LInt ] LInt ) (FApp "gcd" [Var "gcd@x", Var "gcd@y"])  invalidCVal gcd'
 
         f1 = Var "fibo"
-        d1 = IdState (Fun [LInt ] LInt) (FApp "fibo" [Var "fibo@n"])  undefined fibo'
+        d1 = IdState (Fun [LInt ] LInt) (FApp "fibo" [Var "fibo@n"])  invalidCVal fibo'
 
         f2 = Var "irandom"
-        d2 = IdState (Fun [LInt] LInt ) (FApp "irandom" [Var "irandom@n"]) undefined irandom'
+        d2 = IdState (Fun [LInt] LInt ) (FApp "irandom" [Var "irandom@n"]) invalidCVal irandom'
 
         f3 = Var "now"
-        d3 = IdState (Fun [] LInt) (FApp "now" []) undefined (mkIC . (\ _ ->  now ())  <$> get)
+        d3 = IdState (Fun [] LInt) (FApp "now" []) invalidCVal (mkIC . (\ _ ->  now ())  <$> get)
         
         f4 = Var "reset"
-        d4 = IdState (Fun [] Void) (FApp "reset" []) undefined reset
+        d4 = IdState (Fun [] Void) (FApp "reset" []) invalidCVal reset
 
         f5 = Var "logB2"
-        d5 = IdState (Fun [LInt ] LInt) (FApp "logB2" [Var "logB2@n"]) undefined logB2'
+        d5 = IdState (Fun [LInt ] LInt) (FApp "logB2" [Var "logB2@n"]) invalidCVal logB2'
 
         f6 = Var "toBinary"
-        d6 = IdState (Fun [LInt ] LInt) (FApp "toBinary" [Var "toBinary@n"]) undefined toBinary'
+        d6 = IdState (Fun [LInt ] LInt) (FApp "toBinary" [Var "toBinary@n"]) invalidCVal toBinary'
 
         sp0 = Var "type"
-        d7 = IdState (Fun [Any] Any) (FApp "type" [Var "type@expr"]) undefined type''
+        d7 = IdState (Fun [Any] Any) (FApp "type" [Var "type@expr"]) (E Skip) type''
 
         sp1 = Var "ltype"
-        d8 = IdState (Fun [Any] Any) (FApp "ltype" [Var "ltype@expr"]) undefined lType'
+        d8 = IdState (Fun [Any] Any) (FApp "ltype" [Var "ltype@expr"]) (E Skip) lType'
 
         sp2 = Var "cvalue"
-        d9 = IdState (Fun [Any] Any) (FApp "cvalue" [Var "cvalue@expr"]) undefined cvalue'
+        d9 = IdState (Fun [Any] Any) (FApp "cvalue" [Var "cvalue@expr"]) (E Skip) cvalue'
 
         sp3 = Var "if"
-        d10 = IdState (Fun [LBool,Any,Any] Any) (FApp "if" [Var "if@condition", Var "if@ifTrue", Var "if@ifFalse"]) undefined if''
+        d10 = IdState (Fun [LBool,Any,Any] Any) (FApp "if" [Var "if@condition", Var "if@ifTrue", Var "if@ifFalse"]) (E Skip) if''
 
         t = Map.fromList [(f0,d0),(f1,d1),(f2,d2),(f3,d3), (f4,d4), (f5,d5), (f6,d6), (sp0,d7), (sp1,d8), (sp2,d9),(sp3,d10)]
 
@@ -112,11 +114,16 @@ cvalue = fmap (EString .  regenerateS) . getExpCValue
 
 cvalue' :: StateT STable (Either String) Expr
 cvalue' = do
-    st   <- getTable  <$> get
-    args <-  getLazyArgList "cvalue" 
+    st <- get
     let 
+        errMsg = "Error! Expression doesn't have a C-Value"
         g (Just t) = Right t
-        g Nothing  = Left "Error! Expression doesn't have a C-Value"
+        g Nothing  = Left errMsg
+        h (Left _) = Left errMsg
+        h a        = a
+    
+    args <- hoist h $  getLazyArgList "cvalue" 
+    trace (show args) return ()
     case args of
         [arg1] -> hoist g $ Func.Func.cvalue arg1
         _      -> lift . Left $ "If only has 1 argument"
