@@ -120,9 +120,7 @@ validateExp node tabla
             Left ("Error en numero de parametros en llamada a funcion "++name)
     | exprIsReturn node = do 
         validateExp (takeReturn node) tabla 
-    | exprIsVar node = do
-        tipo <- lookupType (takeVar node) tabla
-        return tipo 
+    | exprIsVar node = lType <$> evalStateT (queryVal' node) tabla
     -- Unary expressions
     | exprIsUnary node = do
         tipo <- validateExp (exprUnaryTake node) tabla
@@ -147,7 +145,7 @@ validateExp node tabla
 -- Functions signstures
 getFunc :: String -> STable -> Either String (LipsT,[LipsT])
 getFunc name st@STable{getTable=t} = case evalStateT (queryVal' (Var name)) st  of
-    Left e       -> Left e
+    Left e       ->  Left e
     Right idState  -> case lType idState of 
         (Fun args res) -> Right (res,args)
         _              -> Left (name ++ " no es de tipo funcion.")
@@ -294,7 +292,7 @@ updateST (A (FDeclaration ftype fname args body)) = do
     let
         fLType  = Fun (map fst args) ftype
         fLVal   = FApp (prefix' ++ fname) (map (Var . (prefix ++) . snd) args)
-        fCValue = undefined  -- body
+        fCValue = body
         fRValue = evalUF body
         newState = IdState {lType=fLType, lValue=fLVal, cValue=fCValue, rValue=fRValue}
     addIdState (Var $ prefix' ++ fname) newState const
@@ -334,25 +332,19 @@ lookupType' ef var STable{getTable=table} = case Map.lookup var table of
 lookupType :: String -> STable -> Either String LipsT
 lookupType vName = lookupType' ("La variable: '" ++ vName ++ "' no ha sido declarada, error de asignacion!.") (Var vName)
 
-getExpLType :: Identifier  -> StateT STable Maybe LipsT
-getExpLType (FApp v _) = getExpLType (Var v) 
-getExpLType e = lift . funChecker . fmap lType . Map.lookup e . getTable =<< get
-    where
-        funChecker :: Maybe LipsT -> Maybe LipsT
-        funChecker (Just (Fun _ _)) = Nothing 
-        funChecker ml               = ml 
+eitherToMaybe :: Either b a -> Maybe a
+eitherToMaybe (Right a) = Just a
+eitherToMaybe (Left _)  = Nothing 
 
-    
-getExpType :: (Monad m, MonadFail m) => Expr -> StateT STable m LipsT
-getExpType e = do 
-    Right t <- validate (E e) <$> get 
-    return t 
+getExpLType :: Identifier  -> StateT STable Maybe LipsT
+getExpLType e = hoist eitherToMaybe $  lType <$> queryVal' e  
+
+
+getExpType :: Expr -> StateT STable Maybe LipsT
+getExpType e = hoist eitherToMaybe  $ get >>= \st -> lift (validate (E e) st )
 
 getExpCValue ::  Identifier -> StateT STable Maybe S
-getExpCValue e = lift . getCValue . Map.lookup e . getTable =<< get 
-    where
-        getCValue :: Maybe IdState -> Maybe S
-        getCValue mid                           = cValue <$> mid 
+getExpCValue e = hoist eitherToMaybe $ cValue <$> queryVal' e  
 
 
 
@@ -385,9 +377,8 @@ eval' :: Expr -> StateT STable (Either String) Expr
 eval' ret@(Ret e) = return ret
 eval' expr = do
     expectedType <- (g . lType <$> queryVal' expr) `mplus` lift (Right Any)
-    --trace ("Expected type is: " ++ show expectedType) return ()
     canAC <- getAutocast
-    res <- eF <+> eB <+> eA <+> eL <+> if canAC then eBC <+> eAC else mzero 
+    res <- eF <+> eB <+> eA <+> eL <+> if canAC then eBC <+> eAC else lift $ Left "Bad input types!" 
     case expectedType of 
         LInt    -> mkIC <$> evalArithm canAC res 
         LBool   -> mkBC <$> evalBool canAC res
@@ -409,10 +400,6 @@ eval (E e) = E <$> eval' e
 eval _     = lift (Left "")
 
 
-eitherToMaybe :: Either b a -> Maybe a
-eitherToMaybe (Right a) = Just a
-eitherToMaybe (Left _)  = Nothing 
-
 queryVal' :: Expr -> StateT STable (Either String) IdState 
 queryVal' e = do 
     t <-  get
@@ -428,13 +415,12 @@ queryVal' e = do
                 f Nothing  = Left $ "Variable: " ++ v ++ " does not exist in the current environment: " ++ show (Map.keys t)
         
         prefixes = levels t 
-        
     lift (lookupEnvs t prefixes name) 
 
     -- rValue .  (! e) . getTable =<< get 
 queryVal :: Expr -> StateT STable (Either String) Expr
 queryVal e = queryVal' e >>=  rValue
-    
+
 
 evalArithm :: Bool -> Expr -> StateT STable (Either String) Int
 evalArithm p (C (NumConstant  n)) = return n
@@ -512,22 +498,28 @@ evalFApp e              = lift (Left $ "Error: la expresion " ++ show e ++ " NO 
 
 
 evalFApp' :: Expr -> StateT STable (Either String) Expr
-evalFApp' aux@(FApp fName argsVal) = do
+evalFApp' aux@(FApp fName argsVal') = do
+
+    let g v@(Var _) = eval' v
+        g e         = return e
+        h (Fun as _) = return $ length as
+        h _          = mzero  
+
+    argsVal <- if fName `notElem` ["if","type","cvalue","ltype"] then traverse eval' argsVal' else return argsVal'
     addLevel fName
     prefix <- getPrefix
     st@STable {getTable=t} <- get
-    
     fState <- queryVal' (Var fName)
     args <- case lValue fState of FApp _ as -> lift . Right $   as; _ -> lift . Left $ fName ++ " is not a user defined function!"
-
     let 
         (Fun argsT _)  = lType fState
-
+        g (Var name) = Var $ prefix ++ name
+        g e          = e
         f = getRValue (Var fName)
 
         serializeArg (name, arg, t) = IdState 
             { lType  = t
-            , lValue = name
+            , lValue = g name
             , cValue = E arg
             , rValue = eval' arg
             }
@@ -535,6 +527,7 @@ evalFApp' aux@(FApp fName argsVal) = do
         serializeArgs   = serializeArg <$> zip3 args argsVal argsT
         t'              = foldr (uncurry Map.insert) t (args `zip` serializeArgs)
         fromRight (Right a) = a
+    
     
     res <-   lift $ f st{getTable= t'} 
     put st

@@ -24,7 +24,7 @@ iST :: STable
 iST = STable{getTable=t, autoCast=True, levels = []} 
     where
         
-        invalidCVal = E $ EString "Predefined functions can't have cvalue"
+        invalidCVal = E $ EString "Predefined functions can't have a representable cvalue"
 
         f0 = Var "gcd"
         d0 = IdState (Fun [LInt, LInt ] LInt ) (FApp "gcd" [Var "gcd@x", Var "gcd@y"])  invalidCVal gcd'
@@ -48,16 +48,16 @@ iST = STable{getTable=t, autoCast=True, levels = []}
         d6 = IdState (Fun [LInt ] LInt) (FApp "toBinary" [Var "toBinary@n"]) invalidCVal toBinary'
 
         sp0 = Var "type"
-        d7 = IdState (Fun [Any] Any) (FApp "type" [Var "type@expr"]) (E Skip) type''
+        d7 = IdState (Fun [Any] Any) (FApp "type" [Var "type@expr"]) invalidCVal type''
 
         sp1 = Var "ltype"
-        d8 = IdState (Fun [Any] Any) (FApp "ltype" [Var "ltype@expr"]) (E Skip) lType'
+        d8 = IdState (Fun [Any] Any) (FApp "ltype" [Var "ltype@expr"]) invalidCVal lType'
 
         sp2 = Var "cvalue"
-        d9 = IdState (Fun [Any] Any) (FApp "cvalue" [Var "cvalue@expr"]) (E Skip) cvalue'
+        d9 = IdState (Fun [Any] Any) (FApp "cvalue" [Var "cvalue@expr"]) invalidCVal cvalue'
 
         sp3 = Var "if"
-        d10 = IdState (Fun [LBool,Any,Any] Any) (FApp "if" [Var "if@condition", Var "if@ifTrue", Var "if@ifFalse"]) (E Skip) if''
+        d10 = IdState (Fun [LBool,Any,Any] Any) (FApp "if" [Var "condition", Var "ifTrue", Var "ifFalse"]) invalidCVal if''
 
         t = Map.fromList [(f0,d0),(f1,d1),(f2,d2),(f3,d3), (f4,d4), (f5,d5), (f6,d6), (sp0,d7), (sp1,d8), (sp2,d9),(sp3,d10)]
 
@@ -89,9 +89,16 @@ fromRight (Right a) = a
 type'' :: StateT STable (Either String) Expr
 type'' = do
     st   <- getTable  <$> get
-    args <-  getLazyArgList "type" 
+    args <- getLazyArgList "type" 
     case args of
-        [arg1] -> type' arg1 <$> get 
+        [arg1'] -> do 
+            st <- get
+            let lt = ValidT.ValidT.lType 
+            arg1 <- cValue <$> queryVal' arg1' 
+            case arg1 of
+                (E e) -> (EString . show . lt <$> queryVal' e) `mplus` return (type' e st)
+                _     -> lift . Left $ "The expression does not has a type!"
+            
         _      -> lift . Left $ "If only has 1 argument"
 
 lType :: Expr -> StateT STable Maybe LipsT
@@ -99,14 +106,18 @@ lType = getExpLType
 
 lType' :: StateT STable (Either String) Expr
 lType' = do
-    let 
-        g (Just t) = Right t
-        g Nothing  = Left "Error! Expression doesn't have an L-Type"
     st   <- getTable  <$> get
-    args <-  getLazyArgList "ltype" 
+    args <- getLazyArgList "ltype" 
     case args of
-        [arg1] -> EString . show  <$> hoist g (Func.Func.lType arg1)
-        _      -> lift . Left $ "If only has 1 argument" 
+        [arg1'] -> do 
+            st <- get
+            let lt = ValidT.ValidT.lType 
+            arg1 <- cValue <$> queryVal' arg1' 
+            case arg1 of
+                (E e) -> (EString . show . lt <$> queryVal' e) `mplus` lift (Left $ "The expression: " ++ regenerateExpr e ++ " does not have an ltype!")
+                s     -> lift . Left $ "The expression: " ++ regenerateS s ++ " does not has an ltype!"
+            
+        _      -> lift . Left $ "If only has 1 argument"
         
 
 cvalue :: Expr -> StateT STable Maybe Expr
@@ -115,18 +126,17 @@ cvalue = fmap (EString .  regenerateS) . getExpCValue
 
 cvalue' :: StateT STable (Either String) Expr
 cvalue' = do
-    st <- get
-    let 
-        errMsg = "Error! Expression doesn't have a C-Value"
-        g (Just t) = Right t
-        g Nothing  = Left errMsg
-        h (Left _) = Left errMsg
-        h a        = a
-    
-    args <- hoist h $  getLazyArgList "cvalue" 
-    trace (show args) return ()
+    st   <- getTable  <$> get
+    args <- getLazyArgList "cvalue" 
     case args of
-        [arg1] -> hoist g $ Func.Func.cvalue arg1
+        [arg1'] -> do 
+            st <- get
+            let lt = ValidT.ValidT.lType 
+            arg1 <- cValue <$> queryVal' arg1' 
+            case arg1 of
+                (E e) -> (EString . regenerateS  . ValidT.ValidT.cValue  <$> queryVal' e) `mplus` lift (Left $ "The expression: " ++ regenerateExpr e ++ " does not have a cvalue!")
+                s     -> lift . Left $ "The expression: " ++ regenerateS s ++ " does not has a cvalue!"
+            
         _      -> lift . Left $ "If only has 1 argument"
 
 reset :: Monad m => StateT STable m Expr 
@@ -181,7 +191,7 @@ now () = unsafePerformIO $ round <$> getPOSIXTime
 
 -- | Logarithm in base two of an integer, returns the truncated result without decimals.
 logB2 :: Int -> Int
-logB2 x = if (odd x) then 0 else (floor . logBase 2.0 . fromIntegral) x
+logB2 = floor . logBase 2.0 . fromIntegral
 
 
 
@@ -204,7 +214,7 @@ toBinary n = foldl ((+).(*10)) 0 (fromDecimal n)
 
 toBinary' :: StateT STable (Either String) Expr
 toBinary' = do
-    args <-  getArgList' "logB2" 
+    args <-  getArgList' "toBinary" 
     case args of
         [arg1] -> mkIC . toBinary <$> evalArithm True arg1
         _      -> lift . Left $ "If only has 1 argument"

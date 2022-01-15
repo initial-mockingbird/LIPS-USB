@@ -215,7 +215,6 @@ parseSpecial = char '.' >> foldl1 (<|>)
     , try parseReset   >> getState 
     , try parseQuit  
     , try parseParse2 >> getState
-    , try parseParse3 >> getState  
     , try parseParse  >> getState
     , try parseACON   >> getState 
     , try parseACOff  >> getState 
@@ -299,29 +298,12 @@ parseLex = do
             mapM_ (liftIO . putStrLn . showREPLError) mappedTriples
         Right tokens          -> liftIO $ putStrLn $ showTokenPos args tokens 
 
+
 -- | A parser for the @.parse@ command is just a parser for the string "ast", followed
 -- by the execution of the parse command.
 parseParse :: ParsecT String SessionState IO ()
 parseParse = do
     string "ast"
-    spaces
-    pos'' <- getPosition 
-    args  <- parseArg
-    case H.parse args of
-        Left (error,pos) -> do
-            f <- fromMaybe "." . actualFile <$> getState 
-            let pos' = setSourceColumn pos'' pos
-            let mappedTriples =  (\ (errMsg) -> (f,pos' ,errMsg)) error
-            putErr mappedTriples
-            (liftIO . putStrLn . showREPLError) mappedTriples
-        Right  s -> liftIO $ putStrLn $ showAST s
-
-
--- | A parser for the @.parse@ command is just a parser for the string "ast", followed
--- by the execution of the parse command.
-parseParse3 :: ParsecT String SessionState IO ()
-parseParse3 = do
-    string "ast3"
     spaces
     f <- fromMaybe "." . actualFile <$> getState 
     es <- PP.parse f

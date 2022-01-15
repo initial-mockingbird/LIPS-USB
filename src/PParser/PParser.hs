@@ -176,7 +176,7 @@ isLazyT = tokenPrim show g f
 -- | Builds an expression parser for the variable or function application type.
 isIdOrFapp :: Bool -> SP m Expr
 isIdOrFapp b = do
-    var@(Var fName) <- isId
+    var@(Var fName) <- isId <|> (pType >> return (Var "type"))
     let fapp' = do
             pOP
             fArgs <- pArgs b <?> ("Error in function '" ++ fName ++ "': Functions must specify ALL their arguments.")
