@@ -36,7 +36,7 @@ import           Text.Parsec            (ParseError, ParsecT, SourcePos,
                                          notFollowedBy, optional, parse,
                                          runParserT, sepEndBy, setSourceColumn,
                                          sourceLine, sourceName, spaces, string,
-                                         try, (<?>), (<|>), setPosition)
+                                         try, (<?>), (<|>), setPosition, putState)
 import           Text.Parsec.Char       (alphaNum, anyChar, char, crlf,
                                          endOfLine, newline, spaces, string)
 import           Text.Parsec.Error      (errorMessages, messageString)
@@ -87,6 +87,9 @@ initialST = ST
 -------------------------------
 -- Utility Functions
 -------------------------------
+
+
+
 
 -- | Exec the applicative effect if the condition holds. Exactly the same as @flip when@
 execIf :: Applicative f =>  f () -> Bool -> f ()
@@ -145,6 +148,18 @@ getCurrentEnv = env <$> getState
 updateEnv :: STable -> StateParser ()
 updateEnv newEnv = modifyState (\st -> st{env=newEnv})
 
+turnACON :: StateParser ()
+turnACON = do
+    st@ST {env=_env} <- getState 
+    let newEnv = _env{autoCast=True}
+    putState st{env=newEnv}
+
+turnACOff :: StateParser ()
+turnACOff = do
+    st@ST {env=_env} <- getState 
+    let newEnv = _env{autoCast=False}
+    putState st{env=newEnv}
+
 -------------------------------
 -- Parsing Functions
 -------------------------------
@@ -202,11 +217,27 @@ parseSpecial = char '.' >> foldl1 (<|>)
     , try parseParse2 >> getState
     , try parseParse3 >> getState  
     , try parseParse  >> getState
+    , try parseACON   >> getState 
+    , try parseACOff  >> getState 
     , char 'l' >> (parseLex <|> parseLoad ) >> getState 
     ] <?> "ERROR: bad command"
  
 
+parseACON :: StateParser ()
+parseACON = do
+    string "acON"
+    spaces
+    notFollowedBy anyChar <?> "ERROR: unexpected argument provided to failed"
+    turnACON
+    lift $ putStrLn "Auto Cast is ON!"
 
+parseACOff :: StateParser ()
+parseACOff = do
+    string "acOFF"
+    spaces
+    notFollowedBy anyChar <?> "ERROR: unexpected argument provided to failed"
+    turnACOff
+    lift $ putStrLn "Auto Cast is OFF!"
 
 -- | A parser for the @.failed@ command is just a parser for "failed". Prints to the stdout
 -- the errors.
