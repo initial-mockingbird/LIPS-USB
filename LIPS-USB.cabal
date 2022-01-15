@@ -26,7 +26,6 @@ source-repository head
 library
   exposed-modules:
       AST.AST
-      Borrar.Borrar
       Func.Func
       HGrammar.HGrammar
       Lexer.Lexer
