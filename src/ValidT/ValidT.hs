@@ -109,7 +109,7 @@ validateExp node tabla
             if and $ zipWith compareT tiposParam  tiposF then
                 return tipoF
             else 
-                Left ("Error en tipos de parametros en llamada a funcion "++name ++ " los correctos tipos son = "++show(tiposParam))
+                Left ("Error en tipos de parametros en llamada a funcion "++name ++ " los correctos tipos son = "++show(tiposF))
         else 
             Left ("Error en numero de parametros en llamada a funcion "++name)
     | exprIsReturn node = do 
@@ -183,14 +183,49 @@ addArgsToTable (x:xs) cuTable = do
     let newTable = setIdentifier nombre exp1 tipo cuTable
     addArgsToTable xs newTable 
 
+
+
 {-
 mainValidate = do
     -- int Fun( int a, int b, lazy int c ){ a; b&&True; }
     -- int Fun( int a ){ a; }
-    temp <- parse' "int Fun( int a, int b ){ false; b; a; }"
-    return $ validate temp initialST
+    temp <- parse' "lazy int v := 2; fibo(v);"
+    return $ validate temp iST
+
+iST :: STable
+iST = STable{getTable=t, autoCast=True, levels = []} 
+    where
+
+        f1 = Var "fibo"
+        d1 = IdState (Fun [LInt ] LInt) (FApp "fibo" [Var "fibo@n"])  undefined fibo'
+
+        t = Map.fromList [(f1,d1)]
+
+-- | Fibonacci calculator
+fibo :: Int -> Int
+fibo n = fib !! n
+    where
+        fib = 0 : 1 : [a + b | (a, b) <- zip fib (tail fib)]
+
+fibo' :: StateT STable (Either String) Expr
+fibo' = do
+    args <-  getArgList' "fibo" 
+    case args of
+        [arg1] -> mkIC . fibo <$> evalArithm True arg1
+        _      -> lift . Left $ "If only has 1 argument"
+
+
+
+
+
+
+
+mainRegenerateS = do 
+    arbol <- parse' "1 + (2 + 3) + 1^2^3"
+    return $ regenerateS $ arbol 
 
 -}
+
 
 --------------------------------
 
