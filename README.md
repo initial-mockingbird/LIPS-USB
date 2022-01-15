@@ -124,6 +124,37 @@ OK: 1 + (2 + 3) ==> 6
 OK: (1 + (2 + 3)) + (3 ^ 2) ^ 3 ==> 735
 ```
 
+## New functions
+
+Two new functions were added: `logB2` and `toBinary`, which gets the logarithm in base 2 of a number, and transforms a number to binary respectively:
+
+
+```
+>>> logB2(15)
+OK: logB2(15) ==> 3
+>>> logB2(10 + 5) 
+OK: logB2(10 + 5) ==> 3
+>>> toBinary(1)
+OK: toBinary(1) ==> 1
+>>> toBinary(2)
+OK: toBinary(2) ==> 10
+>>> toBinary(3)
+OK: toBinary(3) ==> 11
+>>> toBinary(4)
+OK: toBinary(4) ==> 100
+>>> toBinary(5)
+OK: toBinary(5) ==> 101
+>>> toBinary(6)
+OK: toBinary(6) ==> 110
+>>> toBinary(-1)
+OK: toBinary(-1) ==> -1
+>>> toBinary(-2) 
+OK: toBinary(-2) ==> -10
+>>> toBinary(-3) 
+OK: toBinary(-3) ==> -11
+```
+`toBinary` of any negative number yields it's representation in Signed Magnitude (with a sign at the beginning).
+
 ## Bugs 
 
 ### Bugs about Functions
@@ -144,6 +175,17 @@ Error: la expresion return(*(Var n,FApp(badFac,-(Var n,1)))) NO es de tipo aritm
 
 A solution to this would be promoting the `if` function to a expression, and thus we would not have the headache of
 trying to handle returns inside functions.
+
+Cvalues/types/ltypes of functions that are applied does not yield errors, instead, they return the cvalue/type/ltype of the function:
+
+```
+>>> int id(int n){return n}
+ACK: int id (int n) {
+return n
+}
+>>> cvalue(id(5))
+OK: cvalue(id(5)) ==> return n
+```
 
 
 ## Installing and Running the REPL

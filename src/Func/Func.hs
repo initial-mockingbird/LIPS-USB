@@ -206,11 +206,17 @@ logB2' = do
 -- | Converting a number from decimal to binary
 fromDecimal :: Int -> [Int]
 fromDecimal 0 = [0]
+fromDecimal n = res : fromDecimal next
+    where
+        (next,res) = n `divMod` 2
+{-
+fromDecimal 0 = [0]
 fromDecimal n = if (mod n 2 == 0) then 0:fromDecimal (div n 2) else 1:fromDecimal (div n 2)
+-}
 
 
 toBinary :: Int -> Int
-toBinary n = foldl ((+).(*10)) 0 (fromDecimal n)
+toBinary n =negate $  foldl ((+).(*10)) 0 (reverse $ fromDecimal $ abs n)
 
 toBinary' :: StateT STable (Either String) Expr
 toBinary' = do
